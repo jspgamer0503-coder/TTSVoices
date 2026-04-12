@@ -1,4 +1,4 @@
-# TTS Voices 2.2.0 — Developer Code Review & Architecture Guide
+# TTS Voices 2.2.5 — Developer Code Review & Architecture Guide
 
 **Prepared by:** Claude Sonnet 4.6 (Anthropic)
 **Status:** Living document — updated with each patch session
