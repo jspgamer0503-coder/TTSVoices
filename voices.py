@@ -1,5 +1,5 @@
 """
-TTS Voices 2.0 - Optimized Voice Synthesis Module
+TTS Voices 2.2.5 - Optimized Voice Synthesis Module
 Priority chain: Kokoro ONNX -> espeak-ng
 
 OPTIMIZATIONS:
