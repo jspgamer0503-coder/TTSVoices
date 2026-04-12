@@ -1,5 +1,5 @@
 """
-TTS Voices 2.0 - Voice Library Module
+TTS Voices 2.2.5 - Voice Library Module
 GUI window for downloading and managing voice models.
 """
 import tkinter as tk
