@@ -1,5 +1,5 @@
 """
-TTS Voices 2.0 - ODF Decryption Module
+TTS Voices 2.2.5 - ODF Decryption Module
 Confirmed algorithm for LibreOffice 24.x - 26.x:
   1. start_key = SHA-256(password.encode("utf-8"))
   2. key       = PBKDF2-HMAC-SHA1(start_key, salt, iterations, key_size)
