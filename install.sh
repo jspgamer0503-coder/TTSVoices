@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-#  TTS Voices 2.2 - Installation Script
+#  TTS Voices 2.2.5 - Installation Script
 #  Supports: Ubuntu, Kali Linux, Debian, Linux Mint
 # ============================================================
 set -euo pipefail
@@ -28,7 +28,7 @@ echo "     ██║      ██║   ███████╗"
 echo "     ██║      ██║   ╚════██║"
 echo "     ██║      ██║   ███████║"
 echo "     ╚═╝      ╚═╝   ╚══════╝"
-echo -e "  TTS Voices 2.2 – Installer${NC}\n"
+echo -e "  TTS Voices 2.2.5 – Installer${NC}\n"
 
 # ── 1. Check Python ──────────────────────────────────────────────────────
 step "Checking Python 3.10+"
@@ -265,7 +265,7 @@ PYEOF
 
 # ── Done ─────────────────────────────────────────────────────────────────
 echo -e "\n${GREEN}╔═════════════════════════════════════════╗"
-echo "║  TTS Voices 2.2 installed successfully  ║"
+echo "║  TTS Voices 2.2.5 installed successfully  ║"
 echo -e "╚═════════════════════════════════════════╝${NC}"
 echo ""
 echo "  Run with:  ttsvoices"
