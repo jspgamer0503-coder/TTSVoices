@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TTS Voices 2.2 – Unlimited Text-to-Speech Engine for Linux"""
+"""TTS Voices 2.2.5 – Unlimited Text-to-Speech Engine for Linux"""
 import os, sys, json, threading, queue, time, tkinter as tk
 from tkinter import ttk, messagebox
 from pathlib import Path
