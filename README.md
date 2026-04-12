@@ -1,4 +1,4 @@
-# TTS Voices 2.0
+# TTS Voices 2.2.5
 **Unlimited Text-to-Speech Engine for Linux**
 
 A professional-grade Linux desktop TTS application with neural voice synthesis,
