@@ -1,6 +1,6 @@
 # TTS Voices — Changelog
 
-## v2.2.3 (2026-04-12)
+## v2.2.3 (2026-04-08)
 
 ### Bug Fixes
 - **Cannot erase typed text** — `_remove_placeholder` now reads the actual textarea
