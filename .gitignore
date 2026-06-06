@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Allow precompiled C extensions shipped with the project
+!audio_fast.so
+
+# User data & config
+.ttsvoices/
+*.log
+logs/
+*.wav
+*.mp3
+*.ogg
+*.opus
+*.m4a
+*.flac
+
+# Models (downloaded separately)
+models/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# Build artifacts
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+build_audio_fast
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
