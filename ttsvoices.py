@@ -2974,10 +2974,9 @@ class AudioToTextWindow:
             pass
 
         def _worker():
-            pip = str(Path(sys.executable).parent / "pip")
             try:
                 r = subprocess.run(
-                    [pip, "install", pkg, "--quiet"],
+                    [sys.executable, "-m", "pip", "install", pkg, "--quiet"],
                     capture_output=True, text=True, timeout=300)
                 if r.returncode == 0:
                     def _ok():
@@ -5271,15 +5270,13 @@ class TTSVoicesApp:
                                fg=C["success"], bg=C["bg"])
         status_lbl.pack(anchor="w", pady=(0,8))
 
-        pip_path = str(Path(_sys.executable).parent / "pip")
-
         def _install(pkg, label):
             status_var.set(f"Installing {label}...")
             status_lbl.configure(fg=C["warning"])
             win.update()
             def _do():
                 try:
-                    r = _sp.run([pip_path, "install", pkg],
+                    r = _sp.run([_sys.executable, "-m", "pip", "install", pkg],
                                 capture_output=True, text=True, timeout=180)
                     if r.returncode == 0:
                         self.root.after(0, lambda: status_var.set(
@@ -5416,10 +5413,8 @@ class TTSVoicesApp:
             install_lbl.configure(fg=C["warning"])
             win.update()
             try:
-                # Find the venv pip or use sys.executable
-                pip = str(Path(sys.executable).parent / "pip")
                 result = subprocess.run(
-                    [pip, "install", "onnxruntime-openvino"],
+                    [sys.executable, "-m", "pip", "install", "onnxruntime-openvino"],
                     capture_output=True, text=True, timeout=120
                 )
                 if result.returncode == 0:
@@ -6156,13 +6151,11 @@ class TTSVoicesApp:
             try: dep_status_lbl.configure(fg=C["warning"])
             except Exception: pass
             import sys as _sys, subprocess as _sp2, threading as _thr2
-            venv_pip = str(Path(_sys.prefix) / "bin" / "pip")
-            if not Path(venv_pip).exists(): venv_pip = "pip"
             pkgs = [p["name"] for p in _outdated_list[0]]
             def _worker2():
                 try:
                     r2 = _sp2.run(
-                        [venv_pip, "install", "--upgrade"] + pkgs,
+                        [_sys.executable, "-m", "pip", "install", "--upgrade"] + pkgs,
                         capture_output=True, text=True, timeout=120
                     )
                     def _done():
@@ -6724,13 +6717,10 @@ class TTSVoicesApp:
         Returns list of dicts: [{name, version, latest_version}, ...]
         """
         import subprocess as _sp, json as _json, sys as _sys
-        # Always use the venv pip, never the system pip
-        venv_pip = str(Path(_sys.prefix) / "bin" / "pip")
-        if not Path(venv_pip).exists():
-            venv_pip = "pip"  # fallback if not in a venv
+        # Always use the current Python's pip — portable, no venv path detection
         try:
             r = _sp.run(
-                [venv_pip, "list", "--outdated", "--format=json"],
+                [_sys.executable, "-m", "pip", "list", "--outdated", "--format=json"],
                 capture_output=True, text=True, timeout=30
             )
             if r.returncode == 0 and r.stdout.strip():
