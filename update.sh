@@ -4,7 +4,7 @@
 GREEN='\033[0;32m'; RED='\033[0;31m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo -e "${BLUE}TTS Voices 2.4.1 Update${NC}\n"
+echo -e "${BLUE}TTS Voices 2.5.0 Update${NC}\n"
 
 # ── Find app location ─────────────────────────────────────────────────────────
 APP_DIR=""
@@ -63,12 +63,13 @@ rm -rf "$APP_DIR/__pycache__" 2>/dev/null && echo -e "  ${GREEN}✓ cache cleare
 # Remove old dep stamps so the installer re-checks on first launch
 rm -f "$HOME/.ttsvoices/.deps_ok_2.2.0" 2>/dev/null
 rm -f "$HOME/.ttsvoices/.deps_ok_2.4.1" 2>/dev/null
+rm -f "$HOME/.ttsvoices/.deps_ok_2.5.0" 2>/dev/null
 
 echo -e "\n${GREEN}╔══════════════════════════════════════════╗"
-echo "║  Updated to TTS Voices v2.4.1  ✓         ║"
+echo "║  Updated to TTS Voices v2.5.0  ✓         ║"
 echo -e "╚══════════════════════════════════════════╝${NC}"
 echo ""
-echo "  What's new in v2.4.1:"
+echo "  What's new in v2.5.0:"
 echo "  • Auto-update checker (glowing icon when update available)"
 echo "  • 'Update now' text shown next to icon when newer version exists"
 echo "  • Settings toggle: auto-check on/off"

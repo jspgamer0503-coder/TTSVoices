@@ -6637,79 +6637,513 @@ class TTSVoicesApp:
         ww = win.winfo_reqwidth(); wh = win.winfo_reqheight()
         win.geometry(f"520x{min(600,max(480,wh))}+{max(0,(sw-520)//2)}+{(sh-min(600,max(480,wh)))//2}")
 
-    def _on_update_btn_click(self):
-        """Update button clicked: offer to run update.sh or do a manual check."""
-        if self._update_available_version:
-            self._show_update_dialog(self._update_available_version)
-        else:
-            self._check_for_update_bg(manual=True)
+    # ── GitHub release endpoints used by the in-app updater ──────────────────
+    _RELEASES_URL  = "https://api.github.com/repos/jspgamer0503-coder/TTSVoices/releases/latest"
+    _RELEASES_PAGE = "https://github.com/jspgamer0503-coder/TTSVoices/releases"
+    _CHANGELOG_URL = (
+        "https://raw.githubusercontent.com/"
+        "jspgamer0503-coder/TTSVoices/main/CHANGELOG.md"
+    )
+    _last_release_meta: dict = {}   # cached /releases/latest response (asset URLs etc.)
 
-    def _show_update_dialog(self, latest: str):
-        """Dialog offering to run update.sh or visit the repo."""
-        import subprocess as _sp, webbrowser as _wb
+    def _on_update_btn_click(self):
+        """Update button clicked: always open the updates menu dialog."""
+        # Kick off a fresh release-metadata fetch in the background so the
+        # dialog can show the latest version + asset URLs without blocking.
+        self._fetch_release_meta_bg()
+        self._show_update_menu_dialog()
+
+    def _show_update_menu_dialog(self):
+        """Always-open Updates dialog. Offers check, changelog, reinstall,
+        and a link to the GitHub releases page. Works even when the local
+        version is already the latest — pressing Update should never feel
+        like a no-op."""
+        import webbrowser as _wb
         win = tk.Toplevel(self.root)
-        win.title("Update Available")
+        win.title("TTS Voices — Updates")
         win.configure(bg=C["bg"])
-        win.resizable(False, False)
+        win.resizable(True, True)
+        win.minsize(480, 360)
         win.transient(self.root)
         win.attributes("-topmost", True)
 
+        # ── Header ────────────────────────────────────────────────────────
         hdr = tk.Frame(win, bg=C["surface"]); hdr.pack(fill="x")
-        tk.Label(hdr, text="⬆  Update Available",
+        tk.Label(hdr, text="⟳  Updates & Maintenance",
                  font=("Courier New", 12, "bold"),
-                 fg=C["warning"], bg=C["surface"],
+                 fg=C["accent2"], bg=C["surface"],
                  padx=20, pady=12).pack(side="left")
+        # State badge on the right
+        state_lbl = tk.Label(hdr, text="  checking…  ",
+                             font=("Courier New", 8, "bold"),
+                             fg=C["muted"], bg=C["surface"],
+                             padx=8, pady=4)
+        state_lbl.pack(side="right", padx=12)
         tk.Frame(win, bg=C["border"], height=1).pack(fill="x")
 
-        body = tk.Frame(win, bg=C["bg"], padx=24, pady=16); body.pack(fill="x")
-        tk.Label(body, text=f"TTS Voices  {latest}  is available.",
-                 font=("Courier New", 11, "bold"),
-                 fg=C["text"], bg=C["bg"]).pack(anchor="w")
-        tk.Label(body, text=f"You are running  {__version__}",
-                 font=("Courier New", 9), fg=C["muted"], bg=C["bg"]).pack(anchor="w", pady=(2,12))
-        tk.Label(body, text="Run update.sh to install, or visit GitHub for release notes.",
-                 font=("Courier New", 9), fg=C["text2"], bg=C["bg"], wraplength=380).pack(anchor="w")
+        # ── Body ──────────────────────────────────────────────────────────
+        body = tk.Frame(win, bg=C["bg"], padx=22, pady=14)
+        body.pack(fill="both", expand=True)
+        body.columnconfigure(1, weight=1)
 
+        def _kv(row, label, value, val_fg=None):
+            tk.Label(body, text=label, font=("Courier New", 9, "bold"),
+                     fg=C["text2"], bg=C["bg"], anchor="w", width=18
+                     ).grid(row=row, column=0, sticky="w", pady=2)
+            v = tk.Label(body, text=value, font=("Courier New", 9),
+                         fg=val_fg or C["text"], bg=C["bg"], anchor="w")
+            v.grid(row=row, column=1, sticky="w", pady=2)
+            return v
+
+        ver_lbl  = _kv(0, "Current version:",
+                       __version__, val_fg=C["accent2"])
+        latest_lbl = _kv(1, "Latest known:",
+                          self._update_available_version or __version__,
+                          val_fg=C["warning"] if self._update_available_version
+                                 else C["muted"])
+        locs = self._detect_install_locations()
+        loc_text = "\n".join(f"  • {x}" for x in locs[:3]) if locs else "  (none detected)"
+        tk.Label(body, text="Install location:",
+                 font=("Courier New", 9, "bold"),
+                 fg=C["text2"], bg=C["bg"], anchor="nw"
+                 ).grid(row=2, column=0, sticky="nw", pady=(6, 2))
+        loc_lbl = tk.Label(body, text=loc_text,
+                           font=("Courier New", 8),
+                           fg=C["text"], bg=C["bg"], anchor="w",
+                           justify="left")
+        loc_lbl.grid(row=2, column=1, sticky="w", pady=(6, 2))
+
+        # Status / progress strip
+        status_var = tk.StringVar(value="Ready.")
         tk.Frame(win, bg=C["border"], height=1).pack(fill="x")
-        foot = tk.Frame(win, bg=C["surface2"], pady=10); foot.pack(fill="x")
+        status_bar = tk.Frame(win, bg=C["surface2"], pady=6, padx=14)
+        status_bar.pack(fill="x")
+        status_lbl = tk.Label(status_bar, textvariable=status_var,
+                              font=("Courier New", 8),
+                              fg=C["text2"], bg=C["surface2"], anchor="w")
+        status_lbl.pack(side="left", fill="x", expand=True)
+        prog = ttk.Progressbar(status_bar, length=140, mode="determinate",
+                               maximum=100)
+        # Hidden initially; shown only during downloads
+        # (packed on demand via .pack / .pack_forget)
 
-        def _run_update():
-            win.destroy()
-            script = str(Path(_APP_DIR) / "update.sh")
-            if Path(script).exists():
-                try:
-                    _sp.Popen(["bash", script], cwd=_APP_DIR)
-                    self._set_status("Updating…", C["warning"])
-                except Exception as e:
-                    self._dark_error(self.root, "Update", f"Could not run update.sh:\n{e}")
-            else:
-                self._dark_error(self.root, "Update", "update.sh not found.\nDownload from GitHub.")
+        def _set_status(text, color=None):
+            status_var.set(text)
+            if color:
+                try: status_lbl.configure(fg=color)
+                except Exception: pass
+            win.update_idletasks()
 
-        def _open_github():
-            win.destroy()
-            try: _wb.open("https://github.com/jspgamer0503-coder/TTSVoices")
+        def _set_state_badge(text, color):
+            try:
+                state_lbl.configure(text=f"  {text}  ", fg=color)
             except Exception: pass
 
-        tk.Button(foot, text="  Later  ",
-                  font=("Courier New", 9), bg=C["surface"], fg=C["muted"],
-                  relief="flat", padx=12, pady=6, cursor="hand2",
-                  command=win.destroy).pack(side="right", padx=(4,12))
-        tk.Button(foot, text="  View on GitHub  ",
-                  font=("Courier New", 9), bg=C["surface2"], fg=C["accent2"],
-                  relief="flat", padx=12, pady=6, cursor="hand2",
-                  highlightthickness=1, highlightbackground=C["border2"],
-                  command=_open_github).pack(side="right", padx=4)
-        tk.Button(foot, text="  Run update.sh  ",
-                  font=("Courier New", 9, "bold"), bg=C["warning"], fg="black",
-                  relief="flat", padx=12, pady=6, cursor="hand2",
-                  activebackground="#e09000",
-                  command=_run_update).pack(side="right", padx=4)
+        # ── Buttons ───────────────────────────────────────────────────────
+        tk.Frame(win, bg=C["border"], height=1).pack(fill="x")
+        foot = tk.Frame(win, bg=C["surface"], pady=12, padx=14)
+        foot.pack(fill="x")
+        foot.columnconfigure(0, weight=1); foot.columnconfigure(1, weight=1)
+        foot.columnconfigure(2, weight=1); foot.columnconfigure(3, weight=1)
 
+        def _btn(parent, text, cmd, col, row, bold=False, fg=None, bg=None):
+            b = tk.Button(parent, text=text,
+                          font=("Courier New", 9, "bold" if bold else "normal"),
+                          bg=bg or C["surface2"], fg=fg or C["text"],
+                          activebackground=C["hover"],
+                          activeforeground=C["text"],
+                          relief="flat", padx=10, pady=8, cursor="hand2",
+                          command=cmd)
+            b.grid(row=row, column=col, padx=4, pady=2, sticky="ew")
+            return b
+
+        def _do_check():
+            _set_status("Checking GitHub for the latest release…")
+            _set_state_badge("checking…", C["muted"])
+            self._fetch_release_meta_bg(on_done=lambda m: win.after(0, _apply_meta, m))
+
+        def _apply_meta(meta: dict):
+            if not meta:
+                _set_status("Could not reach GitHub. Try again later.", C["error"])
+                _set_state_badge("offline", C["error"])
+                return
+            self._last_release_meta = meta
+            tag = meta.get("tag_name", "").lstrip("v") or "?"
+            try:
+                latest_lbl.configure(
+                    text=tag,
+                    fg=C["warning"] if self._parse_version(tag) >
+                                      self._parse_version(__version__)
+                       else C["success"])
+            except Exception: pass
+            new = self._parse_version(tag)
+            cur = self._parse_version(__version__)
+            if new and cur and new > cur:
+                _set_state_badge(f"v{tag} available", C["warning"])
+                _set_status(f"Version {tag} is available. Click 'Reinstall' to upgrade.",
+                            C["warning"])
+            else:
+                _set_state_badge("up to date", C["success"])
+                _set_status("You are running the latest version.", C["success"])
+
+        def _do_changelog():
+            _show_changelog(parent=win, set_status=_set_status)
+
+        def _do_reinstall():
+            meta = self._last_release_meta
+            if not meta:
+                _set_status("Checking release first…", C["text2"])
+                self._fetch_release_meta_bg(
+                    on_done=lambda m: win.after(0, lambda: _start_reinstall(m)))
+            else:
+                _start_reinstall(meta)
+
+        def _start_reinstall(meta: dict):
+            if not meta:
+                _set_status("Could not reach GitHub. Try again later.", C["error"])
+                return
+            deb_asset = next((a for a in meta.get("assets", [])
+                              if a.get("name", "").endswith(".deb")), None)
+            if not deb_asset:
+                _set_status("No .deb asset in the latest release.", C["error"])
+                return
+            self._reinstall_from_deb(
+                url=deb_asset["browser_download_url"],
+                filename=deb_asset["name"],
+                size=deb_asset.get("size", 0),
+                parent=win, set_status=_set_status,
+                progress=prog,
+            )
+
+        def _do_github():
+            win.destroy()
+            try: _wb.open(self._RELEASES_PAGE)
+            except Exception: pass
+
+        _btn(foot, "  Check for updates  ", _do_check,     0, 0, bold=True,
+             fg="white", bg=C["accent"])
+        _btn(foot, "  Show changelog  ",    _do_changelog, 1, 0)
+        _btn(foot, "  Reinstall (.deb)  ",  _do_reinstall, 2, 0,
+             fg=C["warning"])
+        _btn(foot, "  Open GitHub releases  ", _do_github,  3, 0)
+        _btn(foot, "  Close  ",             win.destroy,   3, 1,
+             fg=C["muted"], bg=C["surface"])
+
+        # ── Initial paint ─────────────────────────────────────────────────
         win.update_idletasks()
         w = win.winfo_reqwidth(); h = win.winfo_reqheight()
         sw = self.root.winfo_screenwidth(); sh = self.root.winfo_screenheight()
-        win.geometry(f"{max(w,420)}x{h}+{(sw-max(w,420))//2}+{max(0,(sh-h)//2)}")
+        win.geometry(f"{max(w,520)}x{max(h,400)}+{(sw-max(w,520))//2}+{max(0,(sh-max(h,400))//2)}")
         win.grab_set()
+
+    def _detect_install_locations(self) -> list:
+        """Return a list of human-readable install location strings, ordered
+        from most-likely to least-likely. Used by the updates dialog to tell
+        the user where the app is actually installed."""
+        locs = []
+        seen = set()
+        # 1. The .deb package install (most common on Debian/Ubuntu)
+        for p in ("/usr/share/ttsvoices/ttsvoices.py",
+                  "/opt/ttsvoices/ttsvoices.py"):
+            if Path(p).is_file() and p not in seen:
+                locs.append(f"{p}  (.deb package)")
+                seen.add(p)
+        # 2. The launcher in $PATH
+        import shutil as _sh
+        launcher = _sh.which("ttsvoices")
+        if launcher and launcher not in seen:
+            try:
+                src = Path(launcher).resolve()
+                if src.is_file() and not src.suffix == ".py":
+                    # launcher script — try to read target dir from it
+                    txt = src.read_text(errors="ignore")
+                    import re as _re
+                    m = _re.search(r'cd\s+"([^"]+)"', txt)
+                    if m:
+                        locs.append(f"{m.group(1)}  (via {launcher})")
+                        seen.add(m.group(1))
+            except Exception:
+                pass
+        # 3. The path of the *currently running* ttsvoices.py
+        try:
+            here = str(Path(_APP_DIR).resolve())
+            if here not in seen and Path(here, "ttsvoices.py").is_file():
+                locs.append(f"{here}  (currently running)")
+                seen.add(here)
+        except Exception:
+            pass
+        # 4. Common dev / portable locations
+        for home_p in (Path.home() / "tts_work",
+                       Path.home() / "ttsvoices",
+                       Path.home() / "Documents" / "tts_work"):
+            if (home_p / "ttsvoices.py").is_file() and str(home_p) not in seen:
+                locs.append(f"{home_p}  (portable)")
+                seen.add(str(home_p))
+        if not locs:
+            locs.append("(no install found — running from a temporary location)")
+        return locs
+
+    def _fetch_release_meta_bg(self, on_done=None):
+        """Fetch /releases/latest from GitHub in a background thread.
+        Caches into self._last_release_meta. Calls on_done(dict) on the
+        main thread if provided."""
+        import urllib.request as _ur, json as _json
+        def _worker():
+            try:
+                req = _ur.Request(self._RELEASES_URL, headers={
+                    "User-Agent": f"TTSVoices/{__version__}",
+                    "Accept": "application/vnd.github+json",
+                })
+                with _ur.urlopen(req, timeout=8) as r:
+                    data = _json.loads(r.read(8192).decode("utf-8", errors="ignore"))
+                self._last_release_meta = data
+                if on_done:
+                    self.root.after(0, lambda: on_done(data))
+            except Exception as e:
+                if bug_tracker:
+                    bug_tracker.warning(f"Release metadata fetch failed: {e}")
+                if on_done:
+                    self.root.after(0, lambda: on_done({}))
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _show_changelog(self, parent, set_status):
+        """Fetch CHANGELOG.md from GitHub main and display in a scrollable
+        Toplevel. Falls back to a local CHANGELOG.md if present."""
+        win = tk.Toplevel(parent)
+        win.title("Changelog — TTS Voices")
+        win.configure(bg=C["bg"])
+        win.geometry("720x540")
+        win.transient(parent)
+        win.attributes("-topmost", True)
+
+        hdr = tk.Frame(win, bg=C["surface"]); hdr.pack(fill="x")
+        tk.Label(hdr, text="  Changelog",
+                 font=("Courier New", 12, "bold"),
+                 fg=C["accent2"], bg=C["surface"],
+                 padx=14, pady=10).pack(side="left")
+        tk.Frame(win, bg=C["border"], height=1).pack(fill="x")
+
+        txt_frame = tk.Frame(win, bg=C["bg"])
+        txt_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        scr = tk.Scrollbar(txt_frame)
+        scr.pack(side="right", fill="y")
+        txt = tk.Text(txt_frame, wrap="word", font=("Courier New", 9),
+                      bg=C["surface"], fg=C["text"],
+                      insertbackground=C["text"],
+                      selectbackground=C["accent_dim"],
+                      selectforeground="white",
+                      relief="flat", padx=10, pady=10,
+                      yscrollcommand=scr.set)
+        txt.pack(side="left", fill="both", expand=True)
+        scr.config(command=txt.yview)
+        # Markdown-ish header highlighting
+        txt.tag_configure("h1", font=("Courier New", 12, "bold"),
+                          foreground=C["accent2"])
+        txt.tag_configure("h2", font=("Courier New", 10, "bold"),
+                          foreground=C["warning"])
+        txt.tag_configure("muted", foreground=C["muted"])
+        txt.configure(state="disabled")
+
+        set_status("Fetching changelog from GitHub…", C["text2"])
+
+        def _render(md: str, source: str):
+            txt.configure(state="normal")
+            txt.delete("1.0", "end")
+            for line in md.splitlines():
+                if line.startswith("# "):
+                    txt.insert("end", line[2:] + "\n", "h1")
+                elif line.startswith("## "):
+                    txt.insert("end", line[3:] + "\n", "h2")
+                else:
+                    txt.insert("end", line + "\n")
+            txt.insert("end", f"\n\n— loaded from {source}\n", "muted")
+            txt.configure(state="disabled")
+            set_status(f"Changelog loaded from {source}", C["success"])
+
+        def _worker():
+            import urllib.request as _ur
+            try:
+                req = _ur.Request(self._CHANGELOG_URL, headers={
+                    "User-Agent": f"TTSVoices/{__version__}"
+                })
+                with _ur.urlopen(req, timeout=6) as r:
+                    md = r.read(65536).decode("utf-8", errors="ignore")
+                if not md.strip():
+                    raise RuntimeError("empty response")
+                win.after(0, lambda: _render(md, "GitHub"))
+            except Exception:
+                # Fall back to local CHANGELOG.md
+                local = Path(_APP_DIR) / "CHANGELOG.md"
+                if local.is_file():
+                    md = local.read_text(encoding="utf-8", errors="ignore")
+                    win.after(0, lambda: _render(md, "local file"))
+                else:
+                    def _fail():
+                        _render("# Changelog unavailable\n\n"
+                                "Could not reach GitHub and no local "
+                                "CHANGELOG.md was found.\n",
+                                "error")
+                        set_status("Changelog unavailable (offline + no "
+                                   "local copy)", C["error"])
+                    win.after(0, _fail)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _reinstall_from_deb(self, url: str, filename: str, size: int,
+                            parent, set_status, progress):
+        """Download a .deb asset from GitHub, then install it via pkexec+dpkg.
+        All work happens in background threads; UI is updated via parent.after."""
+        import tempfile as _tf, shutil as _sh, subprocess as _sp, urllib.request as _ur
+        set_status(f"Downloading {filename}…", C["text2"])
+        try:
+            progress.pack(side="right", padx=8)
+            progress["value"] = 0
+        except Exception: pass
+        # Download into a temp file
+        tmpdir = _tf.mkdtemp(prefix="ttsvoices_update_")
+        dest = str(Path(tmpdir) / filename)
+        cancel_flag = {"v": False}
+
+        def _dl_worker():
+            try:
+                req = _ur.Request(url, headers={
+                    "User-Agent": f"TTSVoices/{__version__}"
+                })
+                with _ur.urlopen(req, timeout=30) as r:
+                    total = int(r.headers.get("Content-Length") or size or 0)
+                    got = 0
+                    with open(dest, "wb") as f:
+                        while True:
+                            if cancel_flag["v"]:
+                                raise RuntimeError("cancelled")
+                            chunk = r.read(65536)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            got += len(chunk)
+                            if total > 0:
+                                pct = min(100, got * 100 / total)
+                                parent.after(0, lambda p=pct: progress.configure(value=p))
+                parent.after(0, lambda: _on_dl_done(dest))
+            except Exception as e:
+                err = str(e)
+                parent.after(0, lambda: _on_dl_fail(err))
+
+        def _on_dl_done(path):
+            try: progress.pack_forget()
+            except Exception: pass
+            set_status(f"Downloaded {filename}. Verifying…", C["text2"])
+            # Sanity: file must be a valid .deb (starts with "!<arch>")
+            try:
+                with open(path, "rb") as f:
+                    magic = f.read(8)
+                if not magic.startswith(b"!<arch>"):
+                    raise RuntimeError(f"Not a valid .deb file (magic={magic!r})")
+            except Exception as e:
+                set_status(f"Downloaded file is invalid: {e}", C["error"])
+                _sh.rmtree(tmpdir, ignore_errors=True)
+                return
+            sz = Path(path).stat().st_size
+            parent.after(0, lambda: _confirm_install(path, sz))
+
+        def _on_dl_fail(err):
+            try: progress.pack_forget()
+            except Exception: pass
+            set_status(f"Download failed: {err}", C["error"])
+
+        def _confirm_install(path, sz):
+            mb = sz / (1024 * 1024)
+            msg = (f"Downloaded {filename}  ({mb:.2f} MB)\n\n"
+                   "Install it now?  This will:\n"
+                   "  • replace /usr/share/ttsvoices/ttsvoices.py\n"
+                   "  • run 'sudo dpkg -i' to register with the package manager\n"
+                   "  • ask you for your password\n\n"
+                   "Continue?")
+            if not self._dark_confirm(parent, "Install update", msg):
+                set_status("Install cancelled.", C["muted"])
+                _sh.rmtree(tmpdir, ignore_errors=True)
+                return
+            set_status("Installing… (you may be prompted for your password)",
+                       C["warning"])
+            threading.Thread(target=_install_worker,
+                             args=(path,), daemon=True).start()
+
+        def _install_worker(path):
+            # Prefer pkexec (graphical sudo prompt) over plain sudo.
+            for cmd in (["pkexec", "dpkg", "-i", path],
+                        ["sudo", "-A", "dpkg", "-i", path],
+                        ["sudo", "dpkg", "-i", path]):
+                try:
+                    r = _sp.run(cmd, capture_output=True, text=True, timeout=120)
+                    parent.after(0, lambda r=r, c=cmd: _on_install_done(r, c))
+                    return
+                except FileNotFoundError:
+                    continue   # this command doesn't exist, try next
+                except Exception as e:
+                    parent.after(0, lambda e=e: _on_install_fail(str(e)))
+                    return
+            parent.after(0, lambda: _on_install_fail(
+                "No privilege-elevation tool found. Install sudo or pkexec."))
+
+        def _on_install_done(r, cmd):
+            if r.returncode == 0:
+                set_status(
+                    f"Installed successfully. Restart the app to use v"
+                    f"{self._last_release_meta.get('tag_name', '?').lstrip('v')}.",
+                    C["success"])
+                if self._dark_confirm(parent, "Restart now?",
+                    "The update is installed.\n\nRestart TTS Voices now "
+                    "to load the new version?"):
+                    self._restart_app()
+            else:
+                # dpkg may complain about missing deps — try apt-get -f install
+                if "dependency problems" in (r.stderr or "").lower():
+                    set_status("Resolving dependencies…", C["warning"])
+                    threading.Thread(target=_fix_deps_worker,
+                                     daemon=True).start()
+                else:
+                    set_status(f"Install failed (exit {r.returncode}): "
+                               f"{(r.stderr or r.stdout or '').strip()[:200]}",
+                               C["error"])
+
+        def _fix_deps_worker():
+            for cmd in (["pkexec", "apt-get", "install", "-f", "-y"],
+                        ["sudo", "apt-get", "install", "-f", "-y"]):
+                try:
+                    r = _sp.run(cmd, capture_output=True, text=True, timeout=180)
+                    parent.after(0, lambda r=r: (
+                        set_status(
+                            "Dependencies resolved. Re-run the updater to retry."
+                            if r.returncode == 0
+                            else f"apt-get -f failed: "
+                                 f"{(r.stderr or '').strip()[:200]}",
+                            C["success"] if r.returncode == 0 else C["error"]),
+                    ))
+                    return
+                except FileNotFoundError:
+                    continue
+                except Exception as e:
+                    parent.after(0, lambda e=e: set_status(
+                        f"apt-get failed: {e}", C["error"]))
+                    return
+
+        def _on_install_fail(err):
+            set_status(f"Install failed: {err}", C["error"])
+
+        threading.Thread(target=_dl_worker, daemon=True).start()
+
+    def _restart_app(self):
+        """Re-exec the current process so the freshly-installed code is
+        loaded. The old process exits with code 0."""
+        try:
+            import sys as _sys, os as _os
+            _os.execv(_sys.executable, [_sys.executable] + _sys.argv)
+        except Exception as e:
+            if bug_tracker:
+                bug_tracker.error(f"Restart failed: {e}")
+            self._dark_error(self.root, "Restart",
+                f"Could not restart automatically:\n{e}\n\n"
+                f"Please close and reopen the app manually.")
 
     def _check_deps_outdated(self):
         """Return list of outdated pip packages using the venv pip.
