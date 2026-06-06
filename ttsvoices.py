@@ -5606,6 +5606,17 @@ class TTSVoicesApp:
 
     # ── Audio-to-Text window ───────────────────────────────────────────────────
     def _open_audio_to_text(self):
+        # Auto-install whisper deps in the background the first time the
+        # user opens the audio-to-text window. The window itself handles the
+        # case where the package isn't ready yet.
+        try:
+            import dep_installer
+            for feat in ("whisper", "vosk", "google_stt"):
+                if not dep_installer.feature_available(feat):
+                    dep_installer.install_in_background(feat)
+                    break   # only kick off one install at a time
+        except Exception:
+            pass
         AudioToTextWindow(self.root, self._on_att_transcript)
 
     def _on_att_transcript(self, text: str):
@@ -6221,6 +6232,7 @@ class TTSVoicesApp:
             self.cfg["chunk_words"] = cv.get()
             self.cfg["highlight_offset"] = ov.get()
             self.cfg["auto_update_check"] = _upd_state[0]
+            cloud_was_off = not self.cfg.get("cloud_tts_enabled", False)
             self.cfg["cloud_tts_enabled"] = _cloud_state[0]
             self.cfg["startup_maximised"] = _max_state[0]
             save_config(self.cfg)
@@ -6229,6 +6241,20 @@ class TTSVoicesApp:
             except Exception: pass
             # Reload voice list to apply the cloud TTS privacy filter
             self._load_voices(preserve_selection=True)
+            # If user just turned cloud ON, auto-install edge_tts in background
+            if cloud_was_off and _cloud_state[0]:
+                try:
+                    import dep_installer
+                    if not dep_installer.feature_available("edge_tts"):
+                        dep_installer.install_in_background(
+                            "edge_tts",
+                            on_done=lambda ok, fn=self._load_voices:
+                                self.root.after(0, lambda: fn(preserve_selection=True))
+                        )
+                        try: self._set_status("Installing Edge TTS…", C["warning"])
+                        except Exception: pass
+                except Exception:
+                    pass
             _toplevel.destroy()   # destroy the real Toplevel, not win_inner
         GlowButton(_toplevel, text="Save", command=_save, normal_bg=C["accent"],
                    hover_bg=C["speak_hover"], fg="white").pack(pady=12)

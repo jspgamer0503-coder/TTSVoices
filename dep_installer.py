@@ -1,16 +1,32 @@
 """
-dep_installer.py — First-run dependency checker and installer for TTS Voices.
+dep_installer.py — On-demand dependency checker and installer for TTS Voices.
 
 Maintained by the opencode AI assistant — see README.md.
-Shows a progress window and installs all missing pip and system packages
-before the main app loads. Only runs when packages are actually missing.
-Subsequent launches skip this entirely (fast path).
+
+Three layers of protection so the app never crashes from a missing module:
+
+1. **Startup check (critical)** — runs from ttsvoices.py main block.
+   Verifies that all CRITICAL python + system deps are installed. If not,
+   shows the first-run installer window. Fast-path on subsequent launches.
+
+2. **Versioned stamp** — stamp file is named with a hash of the dep manifest.
+   Adding a new dep to the list invalidates the stamp and triggers a re-check.
+
+3. **Feature-level check (lazy)** — call `ensure_feature_dep("edge_tts")`
+   before using a feature. Missing deps are installed in the background with
+   a small progress dialog. Non-critical so it never blocks the UI for long.
+
+4. **Permission fallback** — if `pip install` into the venv fails (e.g. system-
+   wide .deb install where the bundled venv is owned by root), falls back to
+   `pip install --target=~/.ttsvoices/site-packages` and prepends that to
+   sys.path so imports work without admin rights.
 """
-import sys, subprocess, importlib.util, threading, os
+import sys, subprocess, importlib.util, threading, os, hashlib
 from pathlib import Path
 
 APP_DIR   = Path(__file__).parent.resolve()
-STAMP     = Path.home() / ".ttsvoices" / ".deps_ok_2.5.0"
+STAMP_DIR = Path.home() / ".ttsvoices"
+USER_PKGS = STAMP_DIR / "site-packages"
 
 # ── Dependency manifest ──────────────────────────────────────────────────────
 # Each entry: (import_name, pip_package, critical)
@@ -48,7 +64,60 @@ SYSTEM_DEPS = [
     (["pw-play", "--version"], "pw-play",    "pipewire-utils"),
 ]
 
+# ── Feature → pip deps mapping ───────────────────────────────────────────────
+# Used by ensure_feature_dep("edge_tts") to install only what's needed
+# for a specific feature, not the whole manifest.
+FEATURE_DEPS = {
+    "edge_tts":      [("edge_tts", "edge-tts>=7.0.0")],
+    "kokoro":        [("kokoro_onnx", "kokoro-onnx>=0.4.2"),
+                      ("onnxruntime", "onnxruntime>=1.20.0")],
+    "whisper":       [("faster_whisper", "faster-whisper")],
+    "vosk":          [("vosk", "vosk")],
+    "google_stt":    [("speech_recognition", "SpeechRecognition")],
+    "pdf":           [("pdfplumber", "pdfplumber>=0.11.0"),
+                      ("pypdf", "pypdf>=5.1.0")],
+    "docx":          [("docx", "python-docx>=1.1.2")],
+    "epub":          [("ebooklib", "ebooklib>=0.18"),
+                      ("bs4", "beautifulsoup4>=4.12.3")],
+    "rtf":           [("striprtf", "striprtf>=0.0.26")],
+    "encrypted":     [("msoffcrypto", "msoffcrypto-tool>=5.4.2"),
+                      ("Crypto", "pycryptodome>=3.21.0")],
+}
 
+
+# ── Stamp management (versioned) ────────────────────────────────────────────
+def _manifest_hash():
+    """Stable hash of the dep manifest. Adding a new dep invalidates stamps."""
+    items = (
+        [(n, p) for n, p, c in PYTHON_DEPS] +
+        [(n, p) for f in FEATURE_DEPS.values() for n, p in f]
+    )
+    return hashlib.sha1(repr(sorted(items)).encode()).hexdigest()[:10]
+
+def _stamp_path():
+    return STAMP_DIR / f".deps_ok_2.5.0_{_manifest_hash()}"
+
+def _is_stamped():
+    """True if the current manifest's stamp file exists."""
+    try:
+        return _stamp_path().exists()
+    except Exception:
+        return False
+
+def _write_stamp():
+    try:
+        STAMP_DIR.mkdir(parents=True, exist_ok=True)
+        _stamp_path().write_text("ok")
+        # Sweep old stamps so the dir doesn't grow forever
+        for old in STAMP_DIR.glob(".deps_ok_2.5.0_*"):
+            if old != _stamp_path():
+                try: old.unlink()
+                except Exception: pass
+    except Exception:
+        pass
+
+
+# ── Detection helpers ───────────────────────────────────────────────────────
 def _spec(name):
     return importlib.util.find_spec(name) is not None
 
@@ -56,40 +125,107 @@ def _which(cmd):
     r = subprocess.run(["which", cmd], capture_output=True)
     return r.returncode == 0
 
-def needs_install():
-    """Return True if any critical dependency is missing."""
-    if STAMP.exists():
-        return False
-    # Quick check: critical deps only
-    critical = [n for n, _, crit in PYTHON_DEPS if crit]
-    return not all(_spec(n) for n in critical)
-
 def _missing_python():
-    return [(n, pkg, c) for n, pkg, c in PYTHON_DEPS if not _spec(n)]
+    return [(n, p) for n, p, _ in PYTHON_DEPS if not _spec(n)]
 
 def _missing_system():
     missing = []
     for check_cmd, name, apt in SYSTEM_DEPS:
-        r = subprocess.run(check_cmd, capture_output=True)
-        if r.returncode != 0:
+        try:
+            r = subprocess.run(check_cmd, capture_output=True, timeout=5)
+            if r.returncode != 0:
+                missing.append((name, apt))
+        except Exception:
             missing.append((name, apt))
     return missing
 
+def needs_install():
+    """Return True if any critical dependency is missing."""
+    if _is_stamped():
+        return False
+    critical = [n for n, _, c in PYTHON_DEPS if c]
+    for n in critical:
+        if not _spec(n):
+            return True
+    for _, _, apt in SYSTEM_DEPS[:3]:  # espeak, ffmpeg, gcc
+        if not _which(apt.split("/")[-1]):
+            return True
+    return False
 
-# ── Tkinter progress window ──────────────────────────────────────────────────
-def run_installer_window():
-    """Show a themed progress window and install all missing packages."""
+def feature_available(feature):
+    """Return True if all pip packages for a feature are importable."""
+    deps = FEATURE_DEPS.get(feature, [])
+    return all(_spec(n) for n, _ in deps)
+
+
+# ── pip install with permission fallback ─────────────────────────────────────
+def _pip_install(packages, target=None, timeout=300):
+    """
+    Install pip packages. Tries in order:
+      1. `pip install` in the current Python environment
+      2. `pip install --target=<user dir>` (no admin needed)
+    Returns (success: bool, target_dir: str|None).
+    """
+    STAMP_DIR.mkdir(parents=True, exist_ok=True)
+    targets_to_try = [target] if target else [None, str(USER_PKGS)]
+    last_err = ""
+    for tgt in targets_to_try:
+        cmd = [sys.executable, "-m", "pip", "install", "--quiet", "--disable-pip-version-check"]
+        if tgt:
+            cmd += ["--target", tgt, "--no-warn-script-location"]
+        cmd += list(packages)
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            if r.returncode == 0:
+                if tgt:
+                    _ensure_user_pkgs_on_path(tgt)
+                return True, tgt
+            last_err = (r.stderr or r.stdout or "").strip()[:200]
+        except subprocess.TimeoutExpired:
+            last_err = "timeout"
+        except Exception as e:
+            last_err = str(e)[:200]
+    return False, None
+
+def _ensure_user_pkgs_on_path(target_dir):
+    """Prepend a user --target directory to sys.path so imports work."""
+    target_dir = str(target_dir)
+    if target_dir not in sys.path:
+        sys.path.insert(0, target_dir)
+    # Persist a .pth file so subsequent Python processes also see it
+    try:
+        site_dir = STAMP_DIR
+        pth = site_dir / "_user_pkgs.pth"
+        existing = pth.read_text().splitlines() if pth.exists() else []
+        if target_dir not in existing:
+            existing.append(target_dir)
+            pth.write_text("\n".join(existing) + "\n")
+    except Exception:
+        pass
+
+
+# ── Tkinter progress window (first-run style) ───────────────────────────────
+def run_installer_window(missing_py=None, missing_sys=None, title="First Run Setup"):
+    """Show a themed progress window and install missing packages.
+    If missing_py/missing_sys are None, detect automatically."""
     import tkinter as tk
     from tkinter import ttk
 
+    if missing_py is None:
+        missing_py = _missing_python()
+    if missing_sys is None:
+        missing_sys = _missing_system()
+    if not missing_py and not missing_sys:
+        _write_stamp()
+        return True
+
     root = tk.Tk()
-    root.title("TTS Voices — First Run Setup")
+    root.title(f"TTS Voices — {title}")
     root.geometry("560x420")
     root.configure(bg="#080c18")
     root.resizable(False, False)
-    # Centre on screen
     root.update_idletasks()
-    sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+    sw, sh = root.wininfo_screenwidth(), root.wininfo_screenheight()
     root.geometry(f"560x420+{(sw-560)//2}+{(sh-420)//2}")
 
     BG   = "#080c18"
@@ -102,175 +238,185 @@ def run_installer_window():
     WARN = "#f59e0b"
 
     # Header
-    hdr = tk.Frame(root, bg="#060a14")
+    hdr = tk.Frame(root, bg=SRF, padx=20, pady=14)
     hdr.pack(fill="x")
-    tk.Label(hdr, text="◈  TTS Voices 2.3  —  First Run Setup",
-             font=("Courier New", 11, "bold"), fg=ACC, bg="#060a14",
-             padx=20, pady=12).pack(side="left")
+    tk.Label(hdr, text="🔊  TTS Voices", font=("Segoe UI", 16, "bold"),
+             fg=ACC, bg=SRF).pack(anchor="w")
+    tk.Label(hdr, text="Installing missing components…", font=("Courier New", 9),
+             fg=MUT, bg=SRF).pack(anchor="w")
 
-    tk.Frame(root, bg="#1a2a45", height=1).pack(fill="x")
+    # Progress
+    pb_outer = tk.Frame(root, bg=BG)
+    pb_outer.pack(fill="x", padx=20, pady=(14, 4))
+    pb_canvas = tk.Canvas(pb_outer, height=10, bg=SRF, highlightthickness=0)
+    pb_canvas.pack(fill="x")
+    def _draw_pbar(pct):
+        pb_canvas.delete("all")
+        w = pb_canvas.winfo_width()
+        pb_canvas.create_rectangle(0, 0, int(w * pct / 100), 10, fill=ACC, outline="")
+    root.update_idletasks()
+    _draw_pbar(0)
 
-    tk.Label(root, text="Installing dependencies. This only happens once.",
-             font=("Courier New", 9), fg=MUT, bg=BG, pady=8).pack()
+    status_lbl = tk.Label(root, text="Preparing…", font=("Courier New", 10, "bold"),
+                          fg=TXT, bg=BG, anchor="w")
+    status_lbl.pack(fill="x", padx=20, pady=(4, 2))
 
-    # Progress bar
-    prog_var = tk.DoubleVar(value=0)
-    pb_frame = tk.Frame(root, bg="#111e33")
-    pb_frame.pack(fill="x", padx=0)
-    pb = ttk.Progressbar(pb_frame, variable=prog_var, maximum=100)
-    s = ttk.Style()
-    s.theme_use("clam")
-    s.configure("TProgressbar", troughcolor="#111e33", background="#1a6cf5",
-                 bordercolor="#1a2a45", lightcolor="#1a6cf5", darkcolor="#1a6cf5")
-    pb.pack(fill="x", side="left", expand=True)
-    pct_lbl = tk.Label(pb_frame, text="0%", font=("Courier New", 8),
-                        fg=TXT, bg="#111e33", width=5)
-    pct_lbl.pack(side="right", padx=4)
-    prog_var.trace_add("write", lambda *_:
-        pct_lbl.configure(text=f"{prog_var.get():.0f}%"))
-
-    # Status label
-    status_var = tk.StringVar(value="Checking installed packages…")
-    status_lbl = tk.Label(root, textvariable=status_var,
-                           font=("Courier New", 9), fg=WARN, bg=BG, pady=4)
-    status_lbl.pack()
-
-    # Log area
-    log_frame = tk.Frame(root, bg="#1a2a45", pady=1, padx=1)
-    log_frame.pack(fill="both", expand=True, padx=12, pady=(0, 8))
-    log_frame.rowconfigure(0, weight=1)
-    log_frame.columnconfigure(0, weight=1)
-
-    log_ta = tk.Text(log_frame, bg=SRF, fg=TXT, font=("Courier New", 8),
-                     relief="flat", padx=10, pady=8, state="disabled",
-                     wrap="word")
-    log_ta.grid(row=0, column=0, sticky="nsew")
-    vsc = tk.Scrollbar(log_frame, command=log_ta.yview,
-                        bg=SRF, troughcolor=BG, width=8, relief="flat")
-    vsc.grid(row=0, column=1, sticky="ns")
-    log_ta.configure(yscrollcommand=vsc.set)
-
-    # Skip / launch button
-    bot = tk.Frame(root, bg="#0d1526", pady=8)
-    bot.pack(fill="x")
-    skip_btn = tk.Button(bot, text="  Skip & Launch  ",
-                          font=("Courier New", 9, "bold"),
-                          bg="#111e33", fg=MUT, relief="flat",
-                          padx=12, pady=5, cursor="hand2",
-                          command=root.destroy)
-    skip_btn.pack(side="right", padx=12)
+    log_box = tk.Text(root, height=12, bg=SRF, fg=TXT, font=("Courier New", 9),
+                      relief="flat", wrap="word", state="disabled", padx=10, pady=10)
+    log_box.pack(fill="both", expand=True, padx=20, pady=(2, 20))
 
     def _log(msg, color=None):
         def _do():
-            log_ta.configure(state="normal")
-            log_ta.insert("end", msg + "\n")
-            if color:
-                start = log_ta.index("end-2l linestart")
-                end   = log_ta.index("end-1l lineend")
-                tag   = f"c_{color.replace('#','')}"
-                log_ta.tag_configure(tag, foreground=color)
-                log_ta.tag_add(tag, start, end)
-            log_ta.configure(state="disabled")
-            log_ta.see("end")
+            log_box.configure(state="normal")
+            log_box.insert("end", msg + "\n", color or "info")
+            log_box.see("end")
+            log_box.configure(state="disabled")
         root.after(0, _do)
 
-    def _status(txt, col=WARN):
-        root.after(0, lambda: status_var.set(txt))
-        root.after(0, lambda: status_lbl.configure(fg=col))
+    log_box.tag_configure("info",  foreground=TXT)
+    log_box.tag_configure("ok",    foreground=OK)
+    log_box.tag_configure("warn",  foreground=WARN)
+    log_box.tag_configure("error", foreground=ERR)
 
-    def _prog(pct):
-        root.after(0, lambda: prog_var.set(pct))
+    total_steps = max(1, len(missing_py) + len(missing_sys) + 1)
+    step = [0]
+    def _advance():
+        step[0] += 1
+        _draw_pbar(int(step[0] / total_steps * 100))
+
+    def _status(txt, col=None):
+        def _do():
+            status_lbl.configure(text=txt, fg=col or TXT)
+        root.after(0, _do)
 
     def _worker():
-        pip = str(Path(sys.executable).parent / "pip")
-
-        missing_py  = _missing_python()
-        missing_sys = _missing_system()
-        total_steps = len(missing_py) + len(missing_sys) + 2  # +2 for system update + C build
-        step        = [0]
-
-        def _advance():
-            step[0] += 1
-            _prog(step[0] / total_steps * 100)
-
-        # ── System packages ────────────────────────────────────────────────
+        # System packages
         if missing_sys:
-            _status("Installing system packages…")
             pkgs = [apt for _, apt in missing_sys]
             _log(f"System packages to install: {', '.join(pkgs)}")
+            _status("Installing system packages…", WARN)
             try:
                 r = subprocess.run(
-                    ["sudo", "apt-get", "install", "-y", "-qq"] + pkgs,
+                    ["sudo", "-n", "apt-get", "install", "-y", "-qq"] + pkgs,
                     capture_output=True, text=True, timeout=120)
                 if r.returncode == 0:
-                    _log(f"  ✓  System packages installed", OK)
+                    _log("  ✓  System packages installed", "ok")
                 else:
-                    _log(f"  ⚠  sudo apt failed (may need manual install): {r.stderr[:100]}", WARN)
+                    _log("  ⚠  sudo apt failed (may need manual install)", "warn")
             except Exception as e:
-                _log(f"  ⚠  System install skipped: {e}", WARN)
-        _advance()
-
-        # ── Python packages ────────────────────────────────────────────────
-        for import_name, pip_pkg, critical in missing_py:
-            pkg_display = pip_pkg.split(">=")[0].split("==")[0]
-            _status(f"Installing {pkg_display}…")
-            _log(f"  pip install {pip_pkg}")
-            try:
-                r = subprocess.run(
-                    [pip, "install", pip_pkg, "--quiet"],
-                    capture_output=True, text=True, timeout=300)
-                if r.returncode == 0:
-                    _log(f"  ✓  {pkg_display}", OK)
-                else:
-                    marker = ERR if critical else WARN
-                    _log(f"  {'✗' if critical else '⚠'}  {pkg_display}: {r.stderr.strip()[:80]}", marker)
-            except subprocess.TimeoutExpired:
-                _log(f"  ⚠  {pkg_display} timed out", WARN)
-            except Exception as e:
-                _log(f"  ⚠  {pkg_display}: {e}", WARN)
+                _log(f"  ⚠  System install skipped: {e}", "warn")
             _advance()
 
-        # ── Compile C extension ────────────────────────────────────────────
+        # Python packages
+        for import_name, pip_pkg in missing_py:
+            pkg_display = pip_pkg.split(">=")[0].split("==")[0]
+            _status(f"Installing {pkg_display}…", WARN)
+            _log(f"  pip install {pip_pkg}")
+            ok, target = _pip_install([pip_pkg])
+            if ok:
+                if target:
+                    _log(f"  ✓  {pkg_display} (installed to {Path(target).name}/)", "ok")
+                else:
+                    _log(f"  ✓  {pkg_display}", "ok")
+            else:
+                _log(f"  ✗  {pkg_display} — install failed; feature will be disabled", "error")
+            _advance()
+
+        # Compile C extension
         _status("Compiling C audio extension…")
         try:
             r = subprocess.run(
                 [sys.executable, str(APP_DIR / "build_audio_fast.py")],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(APP_DIR))
-            _log(r.stdout.strip() or "  audio_fast.so compiled", OK)
+            _log(r.stdout.strip() or "  audio_fast.so compiled", "ok")
         except Exception as e:
-            _log(f"  ⚠  C build skipped: {e}", WARN)
+            _log(f"  ⚠  C build skipped: {e}", "warn")
         _advance()
 
-        # ── Done ──────────────────────────────────────────────────────────
-        _prog(100)
+        _draw_pbar(100)
         _status("Setup complete — launching TTS Voices…", OK)
-        _log("\n✓  All done. Launching app…", OK)
-
-        # Write stamp file
-        STAMP.parent.mkdir(parents=True, exist_ok=True)
-        STAMP.write_text("ok")
-
-        root.after(1500, root.destroy)
+        _log("\n✓  All done. Launching app…", "ok")
+        _write_stamp()
+        root.after(1200, root.destroy)
 
     threading.Thread(target=_worker, daemon=True).start()
     root.mainloop()
+    return True
 
 
+# ── Public entry points ─────────────────────────────────────────────────────
 def ensure_deps():
     """
-    Entry point: run the installer window if needed, then return.
-    Call this at the very top of ttsvoices.py main block.
+    First-run critical check. Call this at the very top of ttsvoices.py main block.
+    Fast path: returns immediately if stamp file exists.
     """
-    if STAMP.exists():
-        return   # Fast path — already set up
+    if _is_stamped():
+        return   # already set up
     try:
-        import tkinter   # noqa — check Tk is available before showing window
+        import tkinter
         if needs_install():
-            run_installer_window()
+            run_installer_window(title="First Run Setup")
         else:
-            # Everything is present — just write stamp
-            STAMP.parent.mkdir(parents=True, exist_ok=True)
-            STAMP.write_text("ok")
+            _write_stamp()
     except Exception:
-        pass   # Never block the main app from launching
+        pass  # never block startup
+
+
+def ensure_feature_dep(feature, show_window=True):
+    """
+    Ensure a feature's pip deps are installed. Call this before using a feature.
+
+    - If all packages are present: returns True immediately.
+    - If packages are missing:
+        * show_window=True  → show small progress dialog, block until done.
+        * show_window=False → install silently in a background thread, return False.
+    Returns True if feature is usable right now, False if install is in-flight.
+    """
+    deps = FEATURE_DEPS.get(feature, [])
+    if not deps:
+        return True
+    missing = [(n, p) for n, p in deps if not _spec(n)]
+    if not missing:
+        return True
+
+    if not show_window:
+        # Background install — no UI blocking
+        def _bg():
+            _pip_install([p for _, p in missing], timeout=600)
+        threading.Thread(target=_bg, daemon=True).start()
+        return False
+
+    # Show progress window for this feature
+    try:
+        import tkinter
+        run_installer_window(
+            missing_py=missing,
+            missing_sys=[],
+            title=f"Installing {feature.replace('_', ' ').title()}")
+        # Re-check after the dialog closes
+        return all(_spec(n) for n, _ in missing)
+    except Exception:
+        return False
+
+
+def install_in_background(feature, on_done=None):
+    """
+    Install a feature's deps in a background thread. Non-blocking.
+    Calls on_done(success: bool) on the main thread when finished.
+    """
+    deps = FEATURE_DEPS.get(feature, [])
+    missing = [(n, p) for n, p in deps if not _spec(n)]
+    if not missing:
+        if on_done:
+            try: on_done(True)
+            except Exception: pass
+        return
+
+    def _worker():
+        ok, _ = _pip_install([p for _, p in missing], timeout=900)
+        if on_done:
+            try: on_done(ok)
+            except Exception: pass
+
+    threading.Thread(target=_worker, daemon=True).start()
