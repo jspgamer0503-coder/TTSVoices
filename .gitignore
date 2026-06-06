@@ -47,3 +47,4 @@ build_audio_fast
 .pytest_cache/
 .coverage
 htmlcov/
+release/
