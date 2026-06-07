@@ -3149,6 +3149,9 @@ class TTSVoicesApp:
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
+        # ── Show branded splash while engines load ─────────────────────────
+        self.root.after(30, self._show_splash)
+
         # ── Kick off background engine load ───────────────────────────────────
         _bg = threading.Thread(target=_load_engines_background, daemon=True)
         _bg.start()
@@ -3189,6 +3192,7 @@ class TTSVoicesApp:
 
     def _finish_init(self):
         """Run after _load_engines_background() succeeds — sets up provider, voices, etc."""
+        self._close_splash()
 
         # ── Provider selection ─────────────────────────────────────────────────
         saved_prov = self.cfg.get("provider", "CPU")
@@ -3277,6 +3281,10 @@ class TTSVoicesApp:
             f"  startup={startup_ms:.0f}ms"
         )
 
+        # One-shot hardware optimisation (runs silently unless HW changed)
+        self._optimize_for_hardware(silent=True)
+        save_config(self.cfg)
+
 
 
     def _style_ttk(self):
@@ -3356,6 +3364,8 @@ class TTSVoicesApp:
                            tooltip="View session log and error reports")
         self._make_nav_btn(nav, "⊕ Plugins", self._open_plugins_manager,
                            tooltip="Install, enable or disable plugins")
+        self._make_nav_btn(nav, "ℹ About",    self._show_about_dialog,
+                           tooltip="Version info, credits, and logo")
         self._update_btn = self._make_nav_btn(nav, "⟳ Updates", self._on_update_btn_click,
                            tooltip="Check for app updates on GitHub")
         self._update_btn._lbl.configure(fg=C["text2"])  # quiet by default
@@ -7375,6 +7385,86 @@ class TTSVoicesApp:
             try: self._engine_frame.pack_forget()
             except Exception: pass
 
+    # ══════════════════════════════════════════════════════════════════════════
+    #  AUTO-OPTIMIZE — tune settings based on detected hardware
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _optimize_for_hardware(self, silent=False):
+        """Auto-tune app settings to match the detected system.  Called once
+        at the end of _finish_init on fresh install or when hardware changes.
+        Sets cfg keys that the rest of the app already respects."""
+        import os as _os
+
+        cpu_count = _os.cpu_count() or 2
+        ram_mb = 0
+        try:
+            with open("/proc/meminfo") as _f:
+                for _ln in _f:
+                    if _ln.startswith("MemTotal:"):
+                        ram_mb = int(_ln.split()[1]) // 1024
+                        break
+        except Exception:
+            ram_mb = 2048  # safe fallback
+
+        # ── Parallel workers ─────────────────────────────────────────────
+        parallel = max(1, min(cpu_count - 1, 8))
+        if ram_mb < 2048:
+            parallel = max(1, cpu_count // 2)
+
+        # ── Chunk size ───────────────────────────────────────────────────
+        if ram_mb >= 8192:
+            chunk = 8192
+        elif ram_mb >= 4096:
+            chunk = 4096
+        else:
+            chunk = 2048
+
+        # ── GPU detection ────────────────────────────────────────────────
+        try:
+            import voices as _v
+            avail = _v.get_available_providers()
+        except Exception:
+            avail = ("CPUExecutionProvider",)
+        best_gpu = None
+        for p in ("CUDAExecutionProvider", "ROCMExecutionProvider",
+                  "TensorrtExecutionProvider", "DmlExecutionProvider"):
+            if p in avail:
+                best_gpu = p
+                break
+        has_gpu = best_gpu is not None
+
+        # ── Build a hardware digest to detect changes ────────────────────
+        digest = f"cpu{cpu_count}_ram{ram_mb}_gpu{best_gpu or 'none'}"
+
+        # ── Apply to config ──────────────────────────────────────────────
+        old_digest = self.cfg.get("_hw_digest", "")
+        if digest == old_digest and not self.cfg.get("_optimized_once"):
+            return  # already tuned for this hardware
+        changed = digest != old_digest
+
+        self.cfg["parallel_downloads"] = parallel
+        self.cfg["chunk_size"]         = chunk
+        if has_gpu and self.cfg.get("provider", "CPU") == "CPU":
+            self.cfg["provider"] = best_gpu
+        elif not has_gpu:
+            self.cfg["provider"] = "CPUExecutionProvider"
+        self.cfg["_hw_digest"]      = digest
+        self.cfg["_optimized_once"] = True
+
+        if not silent:
+            gpu_str = best_gpu.replace("ExecutionProvider", "") if best_gpu else "none"
+            msg = (f"✓ Optimised for your system: "
+                   f"{cpu_count} cores, {ram_mb} MB RAM, GPU: {gpu_str}, "
+                   f"{parallel} workers, {chunk} KB chunks")
+            self._set_status(msg, C["success"])
+
+    def _rerun_optimization(self):
+        """Force re-optimization and show result in the status bar."""
+        self.cfg.pop("_hw_digest", None)
+        self.cfg.pop("_optimized_once", None)
+        self._optimize_for_hardware(silent=False)
+        save_config(self.cfg)
+
     def _on_close(self):
         """Shut down completely — kill all child processes so the terminal returns."""
         self._stop_flag.set()
@@ -7423,6 +7513,181 @@ class TTSVoicesApp:
         #    even if Vosk's C++ threads or a pip download are still running.
         import os as _os
         _os._exit(0)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  LOGO — spiral pinwheel drawn with Canvas primitives (no deps)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    _LOGO_COLORS = ("#00d4ff", "#0099cc", "#6600ff", "#cc00ff", "#ff0066")
+
+    @staticmethod
+    def _make_logo_canvas(parent, size=140):
+        """Draw the TTSVOICES spiral pinwheel on a tkinter Canvas and
+        return the Canvas widget.  The Canvas is already packed."""
+        bg = getattr(parent, "cget", lambda _: "#000000")("bg")
+        cnv = tk.Canvas(parent, width=size, height=size,
+                        highlightthickness=0, bg=bg)
+        cx = cy = size // 2
+        # 5 spiral arms — draw curved pie slices
+        n_arms = 5
+        for i in range(n_arms):
+            start_angle = i * (360 / n_arms) - 90
+            hue = TTSVoicesApp._LOGO_COLORS[i]
+            dark = TTSVoicesApp._lerp_color(hue, "#000000", 0.35)
+            # Outer ring arc
+            cnv.create_arc(4, 4, size-4, size-4,
+                           start=start_angle - 20,
+                           extent=50, fill=dark, outline="")
+            # Inner spiral fade
+            for ring in range(3, 0, -1):
+                frac = ring / 4
+                c = TTSVoicesApp._lerp_color(hue, bg, frac)
+                margin = int(frac * cx) + 2
+                cnv.create_arc(margin, margin, size-margin, size-margin,
+                               start=start_angle + 5 * (1 - frac),
+                               extent=40 + 45 * frac,
+                               fill=c, outline="",
+                               tags="arm")
+        # Center hub
+        cnv.create_oval(cx-8, cy-8, cx+8, cy+8,
+                        fill="#0a0a1a", outline="")
+        # Glow ring
+        cnv.create_oval(cx-18, cy-18, cx+18, cy+18,
+                        fill="", outline="#6600ff", width=1, dash=(2, 3))
+        # Outer ring
+        cnv.create_oval(2, 2, size-2, size-2,
+                        fill="", outline=TTSVoicesApp._LOGO_COLORS[0],
+                        width=1, dash=(4, 4), tags="outer")
+        return cnv
+
+    @staticmethod
+    def _lerp_color(a: str, b: str, t: float) -> str:
+        """Linearly interpolate two hex colours.  0 → a, 1 → b."""
+        t = max(0, min(1, t))
+        ra = int(a[1:3], 16); ga = int(a[3:5], 16); ba = int(a[5:7], 16)
+        rb = int(b[1:3], 16); gb = int(b[3:5], 16); bb = int(b[5:7], 16)
+        return f"#{int(ra+(rb-ra)*t):02x}{int(ga+(gb-ga)*t):02x}{int(ba+(bb-ba)*t):02x}"
+
+    def _show_splash(self):
+        """Show a themed splash window while the app is loading.  Destroyed
+        when the UI is fully built and _finish_init runs."""
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        w, h = 520, 340
+        sx, sy = (sw - w) // 2, (sh - h) // 2
+        self._splash = tk.Toplevel(self.root)
+        self._splash.overrideredirect(True)
+        self._splash.configure(bg="#000000")
+        self._splash.geometry(f"{w}x{h}+{sx}+{sy}")
+        self._splash.attributes("-topmost", True)
+        self._splash.lift()
+
+        # Dark backdrop
+        bgf = tk.Frame(self._splash, bg="#000000")
+        bgf.pack(fill="both", expand=True)
+        # Logo canvas
+        cnv = self._make_logo_canvas(bgf, size=130)
+        cnv.pack(pady=(30, 4))
+        # Title
+        tk.Label(bgf, text="TTS VOICES",
+                 font=("Segoe UI", 22, "bold"),
+                 fg="#00d4ff", bg="#000000").pack()
+        tk.Label(bgf, text="UNLIMITED TEXT-TO-SPEECH",
+                 font=("Segoe UI", 9, "bold"),
+                 fg="#88aacc", bg="#000000").pack(pady=(2, 12))
+        # Subtle subtitle
+        tk.Label(bgf, text="Kokoro ONNX  ·  espeak-ng  ·  Edge TTS",
+                 font=("Courier New", 7),
+                 fg="#4488aa", bg="#000000").pack()
+        # Animated dots
+        self._splash_dot = tk.Label(bgf, text=".",
+                                    font=("Courier New", 20, "bold"),
+                                    fg="#6600ff", bg="#000000")
+        self._splash_dot.pack(pady=(4, 0))
+        self._splash_phase = 0
+
+        def _animate():
+            if not hasattr(self, "_splash") or not self._splash:
+                return
+            dots = ".oOo" * 3
+            phase = self._splash_phase % len(dots)
+            try:
+                self._splash_dot.configure(text=dots[phase:phase+3])
+            except Exception:
+                pass
+            self._splash_phase += 1
+            self._splash.after(180, _animate)
+
+        self._splash.after(300, _animate)
+        self._splash.update_idletasks()
+
+    def _close_splash(self):
+        """Safely destroy the splash window if it exists."""
+        if hasattr(self, "_splash") and self._splash:
+            try:
+                self._splash.destroy()
+            except Exception:
+                pass
+            self._splash = None
+
+    def _show_about_dialog(self):
+        """About dialog displaying the logo, version, and credits."""
+        win = tk.Toplevel(self.root)
+        win.title(f"About TTS Voices")
+        win.configure(bg=C["bg"])
+        win.resizable(False, False)
+        win.transient(self.root)
+        win.attributes("-topmost", True)
+
+        # Header with logo
+        hdr = tk.Frame(win, bg=C["surface"], pady=14); hdr.pack(fill="x")
+        cnv = self._make_logo_canvas(hdr, size=90)
+        cnv.pack(pady=(0, 6))
+
+        tk.Label(hdr, text="TTS VOICES",
+                 font=("Segoe UI", 16, "bold"),
+                 fg=C["accent2"], bg=C["surface"]).pack(pady=(4, 0))
+        tk.Label(hdr, text="UNLIMITED TEXT-TO-SPEECH",
+                 font=("Segoe UI", 8, "bold"),
+                 fg=C["text2"], bg=C["surface"]).pack()
+        tk.Frame(win, bg=C["border"], height=1).pack(fill="x")
+
+        body = tk.Frame(win, bg=C["bg"], padx=28, pady=14); body.pack(fill="x")
+        info = [
+            ("Version",     f"v{__version__}  ({VERSION_DATE})"),
+            ("Engine",      "Kokoro ONNX  ·  espeak-ng  ·  Edge TTS (cloud)"),
+            ("License",     "MIT  —  Free and open-source"),
+            ("Repository",  "github.com/jspgamer0503-coder/TTSVoices"),
+            ("Author",      "JSP Gamer  (jsp.gamer0503@gmail.com)"),
+            ("Maintenance", "opencode AI assistant"),
+        ]
+        for i, (k, v) in enumerate(info):
+            tk.Label(body, text=k, font=("Courier New", 9, "bold"),
+                     fg=C["text2"], bg=C["bg"]).grid(row=i, column=0, sticky="w", pady=2)
+            tk.Label(body, text=v, font=("Courier New", 9),
+                     fg=C["text"], bg=C["bg"], anchor="w"
+                     ).grid(row=i, column=1, sticky="w", pady=2, padx=(12, 0))
+        tk.Frame(win, bg=C["border"], height=1).pack(fill="x")
+        foot = tk.Frame(win, bg=C["surface2"], pady=10); foot.pack(fill="x")
+        def _do_optimize():
+            self._rerun_optimization()
+            self._set_status("Hardware optimisation complete. Restart app to apply fully.",
+                             C["success"])
+            win.destroy()
+        tk.Button(foot, text="  ⚡ Auto-tune  ",
+                  font=("Courier New", 9), bg=C["accent"], fg="white",
+                  relief="flat", padx=10, pady=6, cursor="hand2",
+                  activebackground=C["accent_dim"],
+                  command=_do_optimize).pack(side="left", padx=(12, 4))
+        tk.Button(foot, text="  Close  ",
+                  font=("Courier New", 9), bg=C["surface"], fg=C["muted"],
+                  relief="flat", padx=14, pady=6, cursor="hand2",
+                  command=win.destroy).pack(side="right", padx=(4, 12))
+        win.update_idletasks()
+        sw = self.root.winfo_screenwidth(); sh = self.root.winfo_screenheight()
+        ww = max(win.winfo_reqwidth(), 420); wh = win.winfo_reqheight()
+        win.geometry(f"{ww}x{wh}+{(sw-ww)//2}+{(sh-wh)//2}")
+        win.grab_set()
 
     def run(self): self.root.mainloop()
 
