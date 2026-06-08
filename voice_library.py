@@ -67,35 +67,25 @@ KOKORO_MODELS = [
         # (28214398 bytes / 26.9 MB).
          "sha256":   "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d",
     },
-    # ── Quantized variants (optional) ─────────────────────────────────────────
-    # Smaller, faster, lower-quality. Useful for low-power U-series CPUs
-    # where the 310 MB FP32 model is too slow. Download ONE of these in
-    # place of the FP32 "kokoro-v1.0.onnx" above — the app will use
-    # whichever one it finds first. SHA-256 hashes are placeholders
-    # (empty string = skip hash check) so the user must trust the
-    # first download manually. To enable strict verification, fill in
-    # the SHA after a clean download:
-    #   sha256sum ~/.ttsvoices/models/kokoro-v1.0.int8.onnx
-    {
-        "name":     "Kokoro INT8 Quantized (v1.0) — optional",
-        "file":     "kokoro-v1.0.int8.onnx",
-        "url":      "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx",
-        "size":     "88 MB",
-        "desc":     "INT8 quantized — ~3x faster on low-power CPUs. "
-                    "Use INSTEAD of the 310 MB model above if your CPU struggles.",
-        "required": False,
-        "sha256":   "",  # TO_VERIFY: sha256sum ~/.ttsvoices/models/kokoro-v1.0.int8.onnx
-    },
-    {
-        "name":     "Kokoro FP16 Half-Precision (v1.0) — optional",
-        "file":     "kokoro-v1.0.fp16.onnx",
-        "url":      "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.fp16.onnx",
-        "size":     "169 MB",
-        "desc":     "FP16 half-precision — smaller than FP32, similar quality. "
-                    "Use INSTEAD of the 310 MB model above for a middle-ground trade-off.",
-        "required": False,
-        "sha256":   "",  # TO_VERIFY: sha256sum ~/.ttsvoices/models/kokoro-v1.0.fp16.onnx
-    },
+# ── Quantized variants (optional) ─────────────────────────────────────────
+# Smaller, faster, lower-quality. Useful for low-power U-series CPUs
+# where the 310 MB FP32 model is too slow. Download ONE of these in
+# place of the FP32 "kokoro-v1.0.onnx" above — the app will use
+# whichever one it finds first. SHA-256 hashes are placeholders
+# (empty string = skip hash check) so the user must trust the
+# first download manually. To enable strict verification, fill in
+# the SHA after a clean download:
+#   sha256sum ~/.ttsvoices/models/kokoro-v1.0.fp16.onnx
+{
+    "name":     "Kokoro FP16 Half-Precision (v1.0) — optional",
+    "file":     "kokoro-v1.0.fp16.onnx",
+    "url":      "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.fp16.onnx",
+    "size":     "169 MB",
+    "desc":     "FP16 half-precision — smaller than FP32, similar quality. "
+                "Use INSTEAD of the 310 MB model above for a middle-ground trade-off.",
+    "required": False,
+    "sha256":   "",  # TO_VERIFY: sha256sum ~/.ttsvoices/models/kokoro-v1.0.fp16.onnx
+},
 ]
 
 
