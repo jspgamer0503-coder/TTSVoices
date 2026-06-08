@@ -3110,6 +3110,10 @@ class TTSVoicesApp:
         try:
             self.root.tk.call("tk", "appname", "ttsvoices")
             self.root.wm_iconname("TTS Voices")
+            icon_path = Path(_APP_DIR) / "ttsvoices_icon.png"
+            if icon_path.is_file():
+                self._icon_img = tk.PhotoImage(file=str(icon_path))
+                self.root.iconphoto(True, self._icon_img)
         except Exception:
             pass
 
@@ -3148,9 +3152,6 @@ class TTSVoicesApp:
         self.volume_var.trace_add("write", self._on_volume_change)
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
-
-        # ── Show branded splash while engines load ─────────────────────────
-        self.root.after(30, self._show_splash)
 
         # ── Kick off background engine load ───────────────────────────────────
         _bg = threading.Thread(target=_load_engines_background, daemon=True)
@@ -3192,7 +3193,6 @@ class TTSVoicesApp:
 
     def _finish_init(self):
         """Run after _load_engines_background() succeeds — sets up provider, voices, etc."""
-        self._close_splash()
 
         # ── Provider selection ─────────────────────────────────────────────────
         saved_prov = self.cfg.get("provider", "CPU")
@@ -7568,67 +7568,6 @@ class TTSVoicesApp:
         rb = int(b[1:3], 16); gb = int(b[3:5], 16); bb = int(b[5:7], 16)
         return f"#{int(ra+(rb-ra)*t):02x}{int(ga+(gb-ga)*t):02x}{int(ba+(bb-ba)*t):02x}"
 
-    def _show_splash(self):
-        """Show a themed splash window while the app is loading.  Destroyed
-        when the UI is fully built and _finish_init runs."""
-        sw = self.root.winfo_screenwidth()
-        sh = self.root.winfo_screenheight()
-        w, h = 520, 340
-        sx, sy = (sw - w) // 2, (sh - h) // 2
-        self._splash = tk.Toplevel(self.root)
-        self._splash.overrideredirect(True)
-        self._splash.configure(bg="#000000")
-        self._splash.geometry(f"{w}x{h}+{sx}+{sy}")
-        self._splash.attributes("-topmost", True)
-        self._splash.lift()
-
-        # Dark backdrop
-        bgf = tk.Frame(self._splash, bg="#000000")
-        bgf.pack(fill="both", expand=True)
-        # Logo canvas
-        cnv = self._make_logo_canvas(bgf, size=130)
-        cnv.pack(pady=(30, 4))
-        # Title
-        tk.Label(bgf, text="TTS VOICES",
-                 font=("Segoe UI", 22, "bold"),
-                 fg="#00d4ff", bg="#000000").pack()
-        tk.Label(bgf, text="UNLIMITED TEXT-TO-SPEECH",
-                 font=("Segoe UI", 9, "bold"),
-                 fg="#88aacc", bg="#000000").pack(pady=(2, 12))
-        # Subtle subtitle
-        tk.Label(bgf, text="Kokoro ONNX  ·  espeak-ng  ·  Edge TTS",
-                 font=("Courier New", 7),
-                 fg="#4488aa", bg="#000000").pack()
-        # Animated dots
-        self._splash_dot = tk.Label(bgf, text=".",
-                                    font=("Courier New", 20, "bold"),
-                                    fg="#6600ff", bg="#000000")
-        self._splash_dot.pack(pady=(4, 0))
-        self._splash_phase = 0
-
-        def _animate():
-            if not hasattr(self, "_splash") or not self._splash:
-                return
-            dots = ".oOo" * 3
-            phase = self._splash_phase % len(dots)
-            try:
-                self._splash_dot.configure(text=dots[phase:phase+3])
-            except Exception:
-                pass
-            self._splash_phase += 1
-            self._splash.after(180, _animate)
-
-        self._splash.after(300, _animate)
-        self._splash.update_idletasks()
-
-    def _close_splash(self):
-        """Safely destroy the splash window if it exists."""
-        if hasattr(self, "_splash") and self._splash:
-            try:
-                self._splash.destroy()
-            except Exception:
-                pass
-            self._splash = None
 
     def _show_about_dialog(self):
         """About dialog displaying the logo, version, and credits."""
