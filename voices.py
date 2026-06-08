@@ -715,10 +715,9 @@ MODELS_DIR = Path.home() / ".ttsvoices" / "models"
 _KOKORO_MODEL_NAMES = [
     "kokoro-v1.0.onnx", "kokoro-v0_19.onnx",
     "kokoro-v0.19.onnx", "model.onnx",
-    # Quantized variants from taylorchu/kokoro-onnx (hosted on
+    # FP16 variants from taylorchu/kokoro-onnx (hosted on
     # thewh1teagle/kokoro-onnx releases). Smaller, faster on CPU,
     # slightly lower quality. Optional — pick whichever you prefer.
-    "kokoro-v1.0.int8.onnx",   # 88 MB — INT8, ~3x faster on low-power CPUs
     "kokoro-v1.0.fp16.onnx",   # 169 MB — FP16, smaller than FP32 with similar quality
     "kokoro-v1.0.fp16-gpu.onnx",  # 169 MB — FP16, GPU-targeted weights
 ]
