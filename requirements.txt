@@ -1,4 +1,4 @@
-# TTS Voices 2.5.0 - Python Dependencies
+# TTS Voices 2.5.1 - Python Dependencies
 # Updated: 2026-05
 
 # ── Core TTS ──────────────────────────────────────────────────────────────────

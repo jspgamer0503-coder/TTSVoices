@@ -61,9 +61,7 @@ fi
 # ── Clear cache and dep stamp ─────────────────────────────────────────────────
 rm -rf "$APP_DIR/__pycache__" 2>/dev/null && echo -e "  ${GREEN}✓ cache cleared${NC}"
 # Remove old dep stamps so the installer re-checks on first launch
-rm -f "$HOME/.ttsvoices/.deps_ok_2.2.0" 2>/dev/null
-rm -f "$HOME/.ttsvoices/.deps_ok_2.4.1" 2>/dev/null
-rm -f "$HOME/.ttsvoices/.deps_ok_2.5.1" "$HOME/.ttsvoices/.deps_ok_2.5.0" 2>/dev/null
+rm -f "$HOME/.ttsvoices"/.deps_ok_* 2>/dev/null
 
 echo -e "\n${GREEN}╔══════════════════════════════════════════╗"
 echo "║  Updated to TTS Voices v2.5.1  ✓         ║"

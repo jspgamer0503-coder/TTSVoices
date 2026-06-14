@@ -467,7 +467,7 @@ class VoiceLibraryWindow:
         outer = tk.Frame(nb, bg=COLORS["bg"])
         nb.add(outer, text="  Engines  ")
 
-        tk.Label(outer, text="TTS Engine Comparison (2025)",
+        tk.Label(outer, text="TTS Engine Comparison (2026)",
                  font=("Courier New", 11, "bold"),
                  fg=COLORS["text"], bg=COLORS["bg"]).pack(anchor="w", padx=16, pady=(14, 2))
         tk.Label(outer,

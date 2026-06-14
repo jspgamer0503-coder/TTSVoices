@@ -109,7 +109,7 @@ def _write_stamp():
         STAMP_DIR.mkdir(parents=True, exist_ok=True)
         _stamp_path().write_text("ok")
         # Sweep old stamps so the dir doesn't grow forever
-        for old in STAMP_DIR.glob(".deps_ok_2.5.1_*"):
+        for old in STAMP_DIR.glob(".deps_ok_*"):
             if old != _stamp_path():
                 try: old.unlink()
                 except Exception: pass
