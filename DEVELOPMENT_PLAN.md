@@ -1,6 +1,6 @@
 # TTS Voices — Development Plan
 
-**Current version:** 2.5.0
+**Current version:** 2.5.1
 **Last updated:** June 2026
 **Maintained by:** opencode AI assistant — see README.md "Development & Maintenance"
 
@@ -46,7 +46,7 @@
 
 ---
 
-## 3. Active Bugs / Known Issues (v2.5.0)
+## 3. Active Bugs / Known Issues (v2.5.1)
 
 | # | Issue | File | Priority |
 |---|-------|------|----------|

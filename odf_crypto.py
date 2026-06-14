@@ -1,5 +1,5 @@
 """
-TTS Voices 2.5.0 - ODF Decryption Module
+TTS Voices 2.5.1 - ODF Decryption Module
 
 Maintained by the opencode AI assistant — see README.md.
 Confirmed algorithm for LibreOffice 24.x - 26.x:

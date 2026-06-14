@@ -1,5 +1,5 @@
 """
-TTS Voices 2.5.0 - Voice Library Module
+TTS Voices 2.5.1 - Voice Library Module
 
 Maintained by the opencode AI assistant — see README.md.
 GUI window for downloading and managing voice models.

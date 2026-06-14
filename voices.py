@@ -1,5 +1,5 @@
 """
-TTS Voices 2.5.0 - Optimized Voice Synthesis Module
+TTS Voices 2.5.1 - Optimized Voice Synthesis Module
 
 Maintained by the opencode AI assistant — see README.md.
 Priority chain: Edge TTS (cloud) -> Kokoro ONNX -> espeak-ng

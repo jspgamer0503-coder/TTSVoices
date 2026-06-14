@@ -1,5 +1,5 @@
 """
-save_point_manager.py — TTS Voices 2.5.0
+save_point_manager.py — TTS Voices 2.5.1
 
 Maintained by the opencode AI assistant — see README.md.
 Persistent per-file save points stored under ~/.ttsvoices/savepoints/

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-#  TTS Voices 2.5.0 - Installation Script
+#  TTS Voices 2.5.1 - Installation Script
 #  Supports: Ubuntu, Kali Linux, Debian, Linux Mint
 #
 #  Maintained by the opencode AI assistant — see README.md.
@@ -30,7 +30,7 @@ echo "     ██║      ██║   ███████╗"
 echo "     ██║      ██║   ╚════██║"
 echo "     ██║      ██║   ███████║"
 echo "     ╚═╝      ╚═╝   ╚══════╝"
-echo -e "  TTS Voices 2.5.0 – Installer${NC}\n"
+echo -e "  TTS Voices 2.5.1 – Installer${NC}\n"
 
 # ── 1. Check Python ──────────────────────────────────────────────────────
 step "Checking Python 3.10+"
@@ -165,7 +165,7 @@ step "Creating config directories"
 mkdir -p "$HOME/.ttsvoices/models"
 mkdir -p "$HOME/.ttsvoices/logs"
 # Clear first-run stamp so dep_installer re-checks after a clean install
-rm -f "$HOME/.ttsvoices/.deps_ok_2.5.0" "$HOME/.ttsvoices/.deps_ok_2.4.1" "$HOME/.ttsvoices/.deps_ok_2.4.0"
+rm -f "$HOME/.ttsvoices/.deps_ok_2.5.1" "$HOME/.ttsvoices/.deps_ok_2.5.0" "$HOME/.ttsvoices/.deps_ok_2.4.1" "$HOME/.ttsvoices/.deps_ok_2.4.0"
 ok "Config directories created at ~/.ttsvoices/"
 
 # ── 12. Launcher script ──────────────────────────────────────────────────
@@ -267,7 +267,7 @@ PYEOF
 
 # ── Done ─────────────────────────────────────────────────────────────────
 echo -e "\n${GREEN}╔═════════════════════════════════════════╗"
-echo "║  TTS Voices 2.5.0 installed successfully  ║"
+echo "║  TTS Voices 2.5.1 installed successfully  ║"
 echo -e "╚═════════════════════════════════════════╝${NC}"
 echo ""
 echo "  Run with:  ttsvoices"

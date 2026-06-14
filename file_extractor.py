@@ -1,5 +1,5 @@
 """
-file_extractor.py — TTS Voices 2.5.0
+file_extractor.py — TTS Voices 2.5.1
 
 Maintained by the opencode AI assistant — see README.md.
 Multi-format document text extraction: PDF, DOCX, DOC, EPUB, HTML, RTF,

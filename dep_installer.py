@@ -95,7 +95,7 @@ def _manifest_hash():
     return hashlib.sha1(repr(sorted(items)).encode()).hexdigest()[:10]
 
 def _stamp_path():
-    return STAMP_DIR / f".deps_ok_2.5.0_{_manifest_hash()}"
+    return STAMP_DIR / f".deps_ok_2.5.1_{_manifest_hash()}"
 
 def _is_stamped():
     """True if the current manifest's stamp file exists."""
@@ -109,7 +109,7 @@ def _write_stamp():
         STAMP_DIR.mkdir(parents=True, exist_ok=True)
         _stamp_path().write_text("ok")
         # Sweep old stamps so the dir doesn't grow forever
-        for old in STAMP_DIR.glob(".deps_ok_2.5.0_*"):
+        for old in STAMP_DIR.glob(".deps_ok_2.5.1_*"):
             if old != _stamp_path():
                 try: old.unlink()
                 except Exception: pass

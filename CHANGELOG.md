@@ -5,14 +5,29 @@ All versions in reverse chronological order.
 > is performed by the [opencode](https://opencode.ai) AI coding assistant,
 > under the direction of the project owner. Earlier versions (v1.x – v2.0)
 > were developed by prior contributors; see git history for full
-> authorship. The current 2.5.0 release is the first stable line where
-> every module has been audited, refactored, and shipped with AI
-> assistance. The license (MIT) and copyright line at the top of LICENSE
-> remain unchanged.
+> authorship. The current 2.5.1 release adds the missing hover color key
+> fix and updates kokoro-onnx to 0.5.0. The license (MIT) and copyright
+> line at the top of LICENSE remain unchanged.
 
 ---
 
-## [2.5.0] — 2026-06-04  ← CURRENT
+## [2.5.1] — 2026-06-14  ← CURRENT
+
+### Bug Fixes
+
+- **Missing `hover` color key** — Added `"hover"` key to all 14 colour themes
+  (`studio`, `midnight`, `crimson`, `yellow`) to prevent `KeyError` in the
+  update dialog button rendering.
+
+### Maintenance
+
+- **kokoro-onnx** bumped from `0.4.2` to `0.5.0` (model files v1.0, v1.1
+  pre-release support)
+- **Minimum pip** version bumped accordingly
+
+---
+
+## [2.5.0] — 2026-06-04
 
 ### New Features
 

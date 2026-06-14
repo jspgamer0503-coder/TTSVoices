@@ -1,4 +1,4 @@
-# TTS Voices 2.5.0
+# TTS Voices 2.5.1
 **Unlimited Text-to-Speech Engine for Linux**
 
 A professional-grade Linux desktop TTS application with neural voice synthesis,
@@ -13,9 +13,9 @@ multi-format document support, and a modern dark UI.
 > the direction of the project owner.
 >
 > All releases from **v2.3.0 onward** have been developed, audited, and
-> shipped with AI assistance. The current 2.5.0 release added the Edge TTS
-> (Cloud) engine, redesigned the system resources display, and incorporates
-> 29 cumulative bug fixes across the 2.4.x line.
+> shipped with AI assistance. The current 2.5.1 release adds the missing
+> hover color key fix, updates kokoro-onnx to 0.5.0, and improves overall
+> stability over the 2.5.0 release.
 >
 > **Project owner:** overseer (this repository)
 > **Active maintainer:** opencode AI assistant (v2.3.0 – present)
@@ -55,7 +55,7 @@ python3 ttsvoices.py
 - **Audio export** – WAV and MP3 via ffmpeg
 - **Voice Library** – download and manage voice models in-app
 - **Save points** – resume long transcriptions from any chunk
-- **Dark UI** – modern navy/blue theme with glow accents, 8 themes available
+- **Dark UI** – modern navy/blue theme with glow accents, 14 themes available
 - **Plugin system** – `~/.ttsvoices/plugins/` for user extensions
 - **Per-core resource monitor** – live CPU/RAM/Disk/Net display in the header
 
@@ -122,7 +122,7 @@ python3 ttsvoices.py
 
 ```
 tts_voices/
-├── ttsvoices.py            # Main GUI application (~6700 lines)
+├── ttsvoices.py            # Main GUI application (~7700 lines)
 ├── voices.py               # TTS engine abstraction & fallback chain
 ├── voice_library.py        # Voice model download & management UI
 ├── file_extractor.py       # Multi-format document text extraction
@@ -228,7 +228,7 @@ The check reads `VERSION` from the GitHub repo once at startup (3-second delay s
 The header subtitle shows live system metrics in a compact, custom format:
 
 ```
-v2.5.0 · ▶0 · CPU ▁▃▅▂▁▃▅▂ 26% · RAM 2.3/7.5G · DSK 69% · ▲35B ▼309B
+v2.5.1 · ▶0 · CPU ▁▃▅▂▁▃▅▂ 26% · RAM 2.3/7.5G · DSK 69% · ▲35B ▼309B
 ```
 
 - **Per-core block characters** (▁▂▃▄▅) – one per logical core

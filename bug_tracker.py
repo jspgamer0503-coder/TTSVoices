@@ -1,5 +1,5 @@
 """
-TTS Voices 2.5.0 - Bug Tracker Module
+TTS Voices 2.5.1 - Bug Tracker Module
 
 Maintained by the opencode AI assistant — see README.md.
 Centralised error logging, crash recovery, self-tests, and health checks.
