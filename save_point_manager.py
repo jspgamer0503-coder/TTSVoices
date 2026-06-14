@@ -20,7 +20,7 @@ def _log(msg: str):
     yet during early startup or when called from a non-app context."""
     try:
         import bug_tracker
-        bug_tracker.info(msg)
+        bug_tracker.warning(msg)
     except Exception:
         import sys
         print(f"[save_point_manager] {msg}", file=sys.stderr)

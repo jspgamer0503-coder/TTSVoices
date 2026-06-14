@@ -165,7 +165,7 @@ step "Creating config directories"
 mkdir -p "$HOME/.ttsvoices/models"
 mkdir -p "$HOME/.ttsvoices/logs"
 # Clear first-run stamp so dep_installer re-checks after a clean install
-rm -f "$HOME/.ttsvoices"/.deps_ok_*
+rm -f "$HOME/.ttsvoices/.deps_ok_2.5.1" "$HOME/.ttsvoices/.deps_ok_2.5.0" "$HOME/.ttsvoices/.deps_ok_2.4.1" "$HOME/.ttsvoices/.deps_ok_2.4.0"
 ok "Config directories created at ~/.ttsvoices/"
 
 # ── 12. Launcher script ──────────────────────────────────────────────────

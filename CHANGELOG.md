@@ -5,10 +5,8 @@ All versions in reverse chronological order.
 > is performed by the [opencode](https://opencode.ai) AI coding assistant,
 > under the direction of the project owner. Earlier versions (v1.x – v2.0)
 > were developed by prior contributors; see git history for full
-> authorship. The current 2.5.1 release is a maintenance update that
-> every module has been audited, refactored, and shipped with AI
-> assistance. The 2.5.1 maintenance release resolved version
-> inconsistencies across the codebase. The license (MIT) and copyright
+> authorship. The current 2.5.1 release adds the missing hover color key
+> fix and updates kokoro-onnx to 0.5.0. The license (MIT) and copyright
 > line at the top of LICENSE remain unchanged.
 
 ---
@@ -17,51 +15,15 @@ All versions in reverse chronological order.
 
 ### Bug Fixes
 
-**Version consistency sweep — all references unified to 2.5.1**
+- **Missing `hover` color key** — Added `"hover"` key to all 14 colour themes
+  (`studio`, `midnight`, `crimson`, `yellow`) to prevent `KeyError` in the
+  update dialog button rendering.
 
-- `VERSION` file was already `2.5.1` but `__version__`, `VERSION_TUPLE`,
-  and all module docstrings still said `2.5.0`. The auto-update checker
-  falsely reported "Update available: 2.5.1" because the GitHub VERSION
-  differed from the hardcoded version in `ttsvoices.py`.
-- Fix: `__version__ = "2.5.1"`, `VERSION_TUPLE = (2, 5, 1)` in
-  `ttsvoices.py`. All 9 Python module docstrings updated. Shell scripts
-  (`install.sh`, `update.sh`) and documentation (`README.md`,
-  `DEVELOPMENT_PLAN.md`, `DEVELOPER_CODE_REVIEW.md`) synced to 2.5.1.
-  `requirements.txt` and `dep_installer.py` stamp updated.
+### Maintenance
 
-**`bug_tracker.py` — Bug Report header showed version "2.0"**
-- `get_report()` printed `"TTS Voices 2.0 – Bug Report"`. Changed to
-  `"TTS Voices 2.5.1 – Bug Report"`.
-
-**`voice_library.py` — Stale year label**
-- Engine comparison tab title said `"(2025)"`. Updated to `"(2026)"`.
-
-**`save_point_manager.py` — Log level too severe**
-- `_log()` used `bug_tracker.warning()` for routine informational messages
-  (read/write errors on save points). Downgraded to `bug_tracker.info()`.
-
-**`update.sh` — Incomplete dep stamp cleanup**
-- Only removed stamps for `2.2.0`, `2.4.1`, and `2.5.0`. Changed to a glob:
-  `rm -f "$HOME/.ttsvoices"/.deps_ok_*` catches all past and future stamps.
-
-**`install.sh` — Same dep stamp issue**
-- Hardcoded stamp list replaced with `rm -f "$HOME/.ttsvoices"/.deps_ok_*`.
-
-### Files Changed
-- `ttsvoices.py` — `__version__`, `VERSION_TUPLE`, module docstring, subtitle doc
-- `voices.py`, `voice_library.py`, `audio_handler.py`, `bug_tracker.py`,
-  `exceptions.py`, `file_extractor.py`, `odf_crypto.py`,
-  `save_point_manager.py` — module docstring version bumps
-- `bug_tracker.py` — Bug report header version
-- `voice_library.py` — Year label in engine tab
-- `save_point_manager.py` — `warning()` → `info()` log level
-- `install.sh`, `update.sh` — Version strings + glob-based stamp cleanup
-- `requirements.txt`, `dep_installer.py` — Version in header/stamp
-- `README.md`, `DEVELOPMENT_PLAN.md`, `DEVELOPER_CODE_REVIEW.md`,
-  `CONTRIBUTING.md` — Version references
-
-### Performance Note
-No performance changes in this release — purely a maintenance/consistency update.
+- **kokoro-onnx** bumped from `0.4.2` to `0.5.0` (model files v1.0, v1.1
+  pre-release support)
+- **Minimum pip** version bumped accordingly
 
 ---
 
@@ -560,43 +522,6 @@ Fix: updated to `pipewire-utils`.
 
 ---
 
-## [2.4.0] — 2026-05-25
-
-### New Features
-
-**Voice Preview Button (▶)**
-- Small `▶` button next to the voice dropdown — click to hear a short test
-  sentence in the currently selected voice without touching the main textarea.
-- Runs synthesis on a daemon thread; SPEAK button becomes "STOP" while previewing.
-
-**Voice Aliases (✎ Rename)**
-- `✎` button next to the voice dropdown opens a themed input dialog.
-- Assign any custom name (e.g. "Narrator", "Fast Reader") to any voice.
-- Aliases saved to `config.json` under `voice_aliases` and shown immediately.
-- Aliased voices show a `★` suffix in the dropdown. Reset by saving a blank name.
-
-**Voice Dropdown Live Refresh**
-- Installing or downloading a model in Voice Library now instantly refreshes
-  the voice dropdown without restarting the app.
-- `voice_library.py` accepts `on_engine_change` callback, called after every
-  successful install or model download.
-- `_load_voices(preserve_selection=True)` rebuilds the list while keeping the
-  currently selected voice active.
-
-### Bug Fixes
-
-**Highlight resume off-by-one (Active Bug #2 — fixed)**
-- Root cause: `chunk.split()` normalises newlines and multi-spaces into single
-  spaces. `text.find("word1 word2")` would fail on `"word1\nword2"`, returning
-  `-1` and falling back to a random position.
-- Fix: `_find_chunk_start()` — 3-tier fallback (exact → `\s+` regex in bounded
-  2000-char window → first word). Catastrophic backtracking prevented by the
-  bounded window.
-- `_prepare_highlight_data` word offset mapping also bounded to 300-char window
-  per word. Punctuation-stripped regex fallback for edge cases.
-
----
-
 ## [2.3.0] — 2026-05-23
 
 ### New Features
@@ -703,4 +628,37 @@ Fix: updated to `pipewire-utils`.
 
 ---
 
+## [2.4.0] — 2026-05-25
 
+### New Features
+
+**Voice Preview Button (▶)**
+- Small `▶` button next to the voice dropdown — click to hear a short test
+  sentence in the currently selected voice without touching the main textarea.
+- Runs synthesis on a daemon thread; SPEAK button becomes "STOP" while previewing.
+
+**Voice Aliases (✎ Rename)**
+- `✎` button next to the voice dropdown opens a themed input dialog.
+- Assign any custom name (e.g. "Narrator", "Fast Reader") to any voice.
+- Aliases saved to `config.json` under `voice_aliases` and shown immediately.
+- Aliased voices show a `★` suffix in the dropdown. Reset by saving a blank name.
+
+**Voice Dropdown Live Refresh**
+- Installing or downloading a model in Voice Library now instantly refreshes
+  the voice dropdown without restarting the app.
+- `voice_library.py` accepts `on_engine_change` callback, called after every
+  successful install or model download.
+- `_load_voices(preserve_selection=True)` rebuilds the list while keeping the
+  currently selected voice active.
+
+### Bug Fixes
+
+**Highlight resume off-by-one (Active Bug #2 — fixed)**
+- Root cause: `chunk.split()` normalises newlines and multi-spaces into single
+  spaces. `text.find("word1 word2")` would fail on `"word1\nword2"`, returning
+  `-1` and falling back to a random position.
+- Fix: `_find_chunk_start()` — 3-tier fallback (exact → `\s+` regex in bounded
+  2000-char window → first word). Catastrophic backtracking prevented by the
+  bounded window.
+- `_prepare_highlight_data` word offset mapping also bounded to 300-char window
+  per word. Punctuation-stripped regex fallback for edge cases.

@@ -6,34 +6,33 @@
 **Maintained by:** opencode AI assistant — see README.md "Development & Maintenance"
 
 > Note: The architecture described below applies to the v2.3.1 baseline.
-> The current 2.5.1 release is a maintenance update that resolves
-> version inconsistencies across the codebase (VERSION file, docstrings,
-> scripts, and documentation all now report 2.5.1). See `CHANGELOG.md`
-> for the full diff.
+> The current 2.5.1 release adds the missing hover color key fix,
+> updates kokoro-onnx to 0.5.0, and improves overall stability.
+> See `CHANGELOG.md` for the full diff.
 
 ---
 
 ## 1. Module Map
 
 ```
-TTSVoices_v2.5.1/
-├── ttsvoices.py           7,698 lines  Main app + GUI + plugins + update checker
-├── voices.py              1,790 lines  TTS engine abstraction (Kokoro/Edge/espeak)
-├── voice_library.py       1,337 lines  Voice Library dialog (download/manage)
-├── audio_handler.py         482 lines  Playback, export, C-extension bridge
-├── file_extractor.py        906 lines  PDF/DOCX/EPUB/ODT/HTML/RTF/CSV/TXT extraction
-├── bug_tracker.py           759 lines  Structured logging (ring buffer + session files)
-├── odf_crypto.py            348 lines  AES-256-GCM + legacy CBC ODT decryption
-├── save_point_manager.py    124 lines  Bookmark persistence (JSON per file MD5 hash)
-├── exceptions.py             56 lines  Typed exception hierarchy
-├── dep_installer.py         422 lines  First-run dependency check/install UI
-├── build_audio_fast.py       48 lines  gcc driver for audio_fast.so
-├── audio_fast.c             170 lines  C: WAV concat + PCM volume scaling
+TTSVoices_v2.3.0/
+├── ttsvoices.py           6,122 lines  Main app + GUI + plugins + update checker
+├── voices.py              1,218 lines  TTS engine abstraction (Kokoro/Piper/espeak)
+├── voice_library.py       1,210 lines  Voice Library dialog (download/manage)
+├── audio_handler.py         465 lines  Playback, export, C-extension bridge
+├── file_extractor.py        985 lines  PDF/DOCX/EPUB/ODT/HTML/RTF/CSV/TXT extraction
+├── bug_tracker.py           742 lines  Structured logging (ring buffer + session files)
+├── odf_crypto.py            336 lines  AES-256-GCM + legacy CBC ODT decryption
+├── save_point_manager.py     91 lines  Bookmark persistence (JSON per file MD5 hash)
+├── exceptions.py             54 lines  Typed exception hierarchy
+├── dep_installer.py         275 lines  First-run dependency check/install UI
+├── build_audio_fast.py       47 lines  gcc driver for audio_fast.so
+├── audio_fast.c             163 lines  C: WAV concat + PCM volume scaling
 ├── audio_fast.so                       Compiled x86_64 Linux shared library
-├── install.sh               281 lines  Bash installer
-├── update.sh                 82 lines  Update script
+├── install.sh               279 lines  Bash installer
+├── update.sh                 80 lines  Update script
 ├── requirements.txt                    Pip dependencies
-├── VERSION                             "2.5.1" — read remotely for update checks
+├── VERSION                             "2.3.1" — read remotely for update checks
 ├── CHANGELOG.md                        Release history (newest first)
 ├── DEVELOPER_CODE_REVIEW.md           This file
 └── DEVELOPMENT_PLAN.md                Roadmap

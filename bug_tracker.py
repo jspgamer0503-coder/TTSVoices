@@ -730,7 +730,7 @@ def get_log_path() -> str:
 
 def get_report() -> str:
     lines = [
-        "TTS Voices 2.5.1 – Bug Report",
+        "TTS Voices 2.0 – Bug Report",
         f"Session: {_session_log.name}",
         "=" * 60,
     ]

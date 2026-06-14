@@ -7,7 +7,7 @@ covers how to report bugs, suggest features, and submit code.
 
 1. Run the app and click **🐞 Bug Log → Save to file**.
 2. Include the exported log in your issue.
-3. Note the version number shown in the header (e.g. `v2.5.1`).
+3. Note the version number shown in the header (e.g. `v2.5.0`).
 4. Describe the steps to reproduce, what you expected, and what
    actually happened.
 
