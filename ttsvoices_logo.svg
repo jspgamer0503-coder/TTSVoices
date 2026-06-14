@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Main gradient for the spiral arms -->
+    <linearGradient id="spiralGrad" x1="0%" y1="0%" x2="100%" y2="100%" gradientUnits="objectBoundingBox">
+      <stop offset="0%" style="stop-color:#00d4ff"/>
+      <stop offset="25%" style="stop-color:#0099cc"/>
+      <stop offset="50%" style="stop-color:#6600ff"/>
+      <stop offset="75%" style="stop-color:#cc00ff"/>
+      <stop offset="100%" style="stop-color:#ff0066"/>
+    </linearGradient>
+    <!-- Glow filter for the center -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- Text gradient -->
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00d4ff"/>
+      <stop offset="50%" style="stop-color:#6600ff"/>
+      <stop offset="100%" style="stop-color:#ff0066"/>
+    </linearGradient>
+    <!-- Inner highlight -->
+    <radialGradient id="centerHighlight" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background circle (subtle) -->
+  <circle cx="256" cy="256" r="248" fill="none" stroke="url(#spiralGrad)" stroke-width="2" opacity="0.15"/>
+
+  <!-- Spiral/Pinwheel arms - 4 curved blades -->
+  <g filter="url(#glow)">
+    <!-- Arm 1: Top-right quadrant -->
+    <path d="M 256 256
+             C 256 180, 330 120, 380 100
+             C 400 110, 410 130, 390 150
+             C 340 170, 260 230, 256 256 Z"
+          fill="url(#spiralGrad)" opacity="0.95"/>
+
+    <!-- Arm 2: Bottom-right quadrant -->
+    <path d="M 256 256
+             C 330 256, 390 180, 410 120
+             C 420 130, 410 150, 390 170
+             C 340 210, 260 250, 256 256 Z"
+          fill="url(#spiralGrad)" opacity="0.85"/>
+
+    <!-- Arm 3: Bottom-left quadrant -->
+    <path d="M 256 256
+             C 180 256, 120 180, 100 120
+             C  90 130, 100 150, 120 170
+             C 170 210, 250 250, 256 256 Z"
+          fill="url(#spiralGrad)" opacity="0.75"/>
+
+    <!-- Arm 4: Top-left quadrant -->
+    <path d="M 256 256
+             C 256 330, 180 390, 120 410
+             C 110 400, 130 390, 150 370
+             C 170 340, 230 260, 256 256 Z"
+          fill="url(#spiralGrad)" opacity="0.9"/>
+  </g>
+
+  <!-- Central hub with highlight -->
+  <circle cx="256" cy="256" r="42" fill="url(#spiralGrad)" opacity="0.9"/>
+  <circle cx="256" cy="256" r="38" fill="url(#centerHighlight)"/>
+  <circle cx="256" cy="256" r="34" fill="#0a0a1a"/>
+
+  <!-- Inner accent ring -->
+  <circle cx="256" cy="256" r="30" fill="none" stroke="url(#spiralGrad)" stroke-width="2" opacity="0.6"/>
+
+  <!-- TTSVOICES text -->
+  <text x="256" y="380" text-anchor="middle" font-family="Arial, Helvetica, sans-serif"
+        font-weight="700" font-size="36" fill="url(#textGrad)" letter-spacing="4">
+    TTSVOICES
+  </text>
+
+  <!-- Subtitle -->
+  <text x="256" y="418" text-anchor="middle" font-family="Arial, Helvetica, sans-serif"
+        font-weight="400" font-size="14" fill="#88aacc" letter-spacing="3">
+    UNLIMITED TEXT-TO-SPEECH
+  </text>
+
+  <!-- Version badge -->
+  <g opacity="0.7">
+    <rect x="216" y="430" width="80" height="18" rx="9" fill="#1a1a2e"/>
+    <text x="256" y="443.5" text-anchor="middle" font-family="monospace"
+          font-weight="600" font-size="11" fill="#00d4ff">v2.5.0</text>
+  </g>
+</svg>
