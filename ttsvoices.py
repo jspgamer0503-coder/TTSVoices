@@ -453,7 +453,7 @@ THEMES = {
         "text":"#e2eaff","text2":"#7a98c8","muted":"#3a4a6a","success":"#00d97e",
         "warning":"#f59e0b","error":"#ef4444","speak_bg":"#1553d0","speak_hover":"#1d6aff",
         "stop_bg":"#6a1010","stop_hover":"#c0392b","header_bg":"#000000","nav_btn":"#0a0a10",
-        "nav_hover":"#14142a","textarea_bg":"#000000","textarea_fg":"#e2eaff",
+        "nav_hover":"#14142a","hover":"#14142a","textarea_bg":"#000000","textarea_fg":"#e2eaff",
         "scrollbar":"#0a0a10","cursor":"#00c8ff","sel_bg":"#0a2a6e","pill_bg":"#000000",
     },
     "light": {
@@ -463,7 +463,7 @@ THEMES = {
         "text":"#0d1526","text2":"#3a5070","muted":"#7a94b0","success":"#1a9e5a",
         "warning":"#c47a00","error":"#c0392b","speak_bg":"#1553d0","speak_hover":"#1d6aff",
         "stop_bg":"#c0392b","stop_hover":"#e74c3c","header_bg":"#1a2a45","nav_btn":"#dce6f5",
-        "nav_hover":"#c8d8f0","textarea_bg":"#ffffff","textarea_fg":"#0d1526",
+        "nav_hover":"#c8d8f0","hover":"#c8d8f0","textarea_bg":"#ffffff","textarea_fg":"#0d1526",
         "scrollbar":"#dce6f5","cursor":"#1a6cf5","sel_bg":"#c8d8f0","pill_bg":"#f0fff4",
     },
     "red": {
@@ -473,7 +473,7 @@ THEMES = {
         "text":"#f5dde0","text2":"#c49098","muted":"#7a4a50","success":"#00d97e",
         "warning":"#f59e0b","error":"#ff3333","speak_bg":"#c0392b","speak_hover":"#e53e3e",
         "stop_bg":"#3d1520","stop_hover":"#6b2030","header_bg":"#0a0406","nav_btn":"#1a0a0e",
-        "nav_hover":"#2d0e16","textarea_bg":"#1a0a0e","textarea_fg":"#f5dde0",
+        "nav_hover":"#2d0e16","hover":"#2d0e16","textarea_bg":"#1a0a0e","textarea_fg":"#f5dde0",
         "scrollbar":"#240d14","cursor":"#ff6b6b","sel_bg":"#5c1f2e","pill_bg":"#0f0608",
     },
     "blue": {
@@ -483,7 +483,7 @@ THEMES = {
         "text":"#d8e8ff","text2":"#7aaad4","muted":"#3a6090","success":"#00d97e",
         "warning":"#f59e0b","error":"#ef4444","speak_bg":"#0d3d99","speak_hover":"#1d6aff",
         "stop_bg":"#7a1515","stop_hover":"#c0392b","header_bg":"#020810","nav_btn":"#071428",
-        "nav_hover":"#0e2d5c","textarea_bg":"#071428","textarea_fg":"#d8e8ff",
+        "nav_hover":"#0e2d5c","hover":"#0e2d5c","textarea_bg":"#071428","textarea_fg":"#d8e8ff",
         "scrollbar":"#0a1c38","cursor":"#5bb8ff","sel_bg":"#0d3d99","pill_bg":"#020810",
     },
     "teal": {
@@ -493,7 +493,7 @@ THEMES = {
         "text":"#d0f0ee","text2":"#70b8b0","muted":"#306860","success":"#00d97e",
         "warning":"#f59e0b","error":"#ef4444","speak_bg":"#007a70","speak_hover":"#00b8a9",
         "stop_bg":"#7a1515","stop_hover":"#c0392b","header_bg":"#020a0a","nav_btn":"#081a1a",
-        "nav_hover":"#0e3838","textarea_bg":"#081a1a","textarea_fg":"#d0f0ee",
+        "nav_hover":"#0e3838","hover":"#0e3838","textarea_bg":"#081a1a","textarea_fg":"#d0f0ee",
         "scrollbar":"#0c2424","cursor":"#00e5d4","sel_bg":"#0e3838","pill_bg":"#020a0a",
     },
     "orange": {
@@ -503,7 +503,7 @@ THEMES = {
         "text":"#fff0d8","text2":"#c4a060","muted":"#806040","success":"#00d97e",
         "warning":"#ffcc00","error":"#ef4444","speak_bg":"#c06000","speak_hover":"#f57c00",
         "stop_bg":"#7a1515","stop_hover":"#c0392b","header_bg":"#0a0600","nav_btn":"#1a1000",
-        "nav_hover":"#2d1e00","textarea_bg":"#1a1000","textarea_fg":"#fff0d8",
+        "nav_hover":"#2d1e00","hover":"#2d1e00","textarea_bg":"#1a1000","textarea_fg":"#fff0d8",
         "scrollbar":"#261700","cursor":"#ffaa33","sel_bg":"#5c3a00","pill_bg":"#0a0600",
     },
     "purple": {
@@ -513,7 +513,7 @@ THEMES = {
         "text":"#eddeff","text2":"#a880d0","muted":"#604888","success":"#00d97e",
         "warning":"#f59e0b","error":"#ef4444","speak_bg":"#5b21b6","speak_hover":"#7c3aed",
         "stop_bg":"#7a1515","stop_hover":"#c0392b","header_bg":"#07040f","nav_btn":"#110920",
-        "nav_hover":"#2a1550","textarea_bg":"#110920","textarea_fg":"#eddeff",
+        "nav_hover":"#2a1550","hover":"#2a1550","textarea_bg":"#110920","textarea_fg":"#eddeff",
         "scrollbar":"#180d2e","cursor":"#c084fc","sel_bg":"#3d2070","pill_bg":"#07040f",
     },
     "pink": {
@@ -523,7 +523,7 @@ THEMES = {
         "text":"#ffe0f0","text2":"#c480a0","muted":"#804868","success":"#00d97e",
         "warning":"#f59e0b","error":"#ef4444","speak_bg":"#9d174d","speak_hover":"#be185d",
         "stop_bg":"#7a1515","stop_hover":"#c0392b","header_bg":"#0a040c","nav_btn":"#1a0c1c",
-        "nav_hover":"#3d1545","textarea_bg":"#1a0c1c","textarea_fg":"#ffe0f0",
+        "nav_hover":"#3d1545","hover":"#3d1545","textarea_bg":"#1a0c1c","textarea_fg":"#ffe0f0",
         "scrollbar":"#241228","cursor":"#f9a8d4","sel_bg":"#5a2060","pill_bg":"#0a040c",
     },
     "golden": {
@@ -533,7 +533,7 @@ THEMES = {
         "text":"#fff5cc","text2":"#ffcc55","muted":"#907040","success":"#00d97e",
         "warning":"#ffcc00","error":"#ef4444","speak_bg":"#ffaa00","speak_hover":"#ffc533",
         "stop_bg":"#7a1515","stop_hover":"#c0392b","header_bg":"#0a0600","nav_btn":"#1a1000",
-        "nav_hover":"#2a1a00","textarea_bg":"#0d0800","textarea_fg":"#fff5cc",
+        "nav_hover":"#2a1a00","hover":"#2a1a00","textarea_bg":"#0d0800","textarea_fg":"#fff5cc",
         "scrollbar":"#1a1000","cursor":"#ffd700","sel_bg":"#3d2800","pill_bg":"#0a0600",
     },
     "green": {
@@ -543,7 +543,7 @@ THEMES = {
         "text":"#d8ffe0","text2":"#70b880","muted":"#306840","success":"#4ade80",
         "warning":"#f59e0b","error":"#ef4444","speak_bg":"#166534","speak_hover":"#16a34a",
         "stop_bg":"#7a1515","stop_hover":"#c0392b","header_bg":"#020a04","nav_btn":"#081a0c",
-        "nav_hover":"#0e3818","textarea_bg":"#081a0c","textarea_fg":"#d8ffe0",
+        "nav_hover":"#0e3818","hover":"#0e3818","textarea_bg":"#081a0c","textarea_fg":"#d8ffe0",
         "scrollbar":"#0c2414","cursor":"#4ade80","sel_bg":"#0e3818","pill_bg":"#020a04",
     },
     "studio": {
@@ -553,7 +553,7 @@ THEMES = {
         "text":"#e8eef5","text2":"#8fa8c4","muted":"#4a5a70","success":"#00d97e",
         "warning":"#f59e0b","error":"#ef4444","speak_bg":"#007a6e","speak_hover":"#00c8b4",
         "stop_bg":"#7a1515","stop_hover":"#c0392b","header_bg":"#020408","nav_btn":"#080e1c",
-        "nav_hover":"#0d1428","textarea_bg":"#020609","textarea_fg":"#e8eef5",
+        "nav_hover":"#0d1428","hover":"#0d1428","textarea_bg":"#020609","textarea_fg":"#e8eef5",
         "scrollbar":"#0d1428","cursor":"#29dfd0","sel_bg":"#0a4a44","pill_bg":"#020408",
     },
     "midnight": {
@@ -563,7 +563,7 @@ THEMES = {
         "text":"#e8e0ff","text2":"#9d8fff","muted":"#4a4580","success":"#00d97e",
         "warning":"#f59e0b","error":"#ef4444","speak_bg":"#4c3fcf","speak_hover":"#6c63ff",
         "stop_bg":"#7a1515","stop_hover":"#c0392b","header_bg":"#000000","nav_btn":"#050510",
-        "nav_hover":"#0f0f25","textarea_bg":"#020208","textarea_fg":"#e8e0ff",
+        "nav_hover":"#0f0f25","hover":"#0f0f25","textarea_bg":"#020208","textarea_fg":"#e8e0ff",
         "scrollbar":"#0a0a1a","cursor":"#a78bfa","sel_bg":"#1a1a3a","pill_bg":"#000000",
     },
     "crimson": {
@@ -573,7 +573,7 @@ THEMES = {
         "text":"#ffe0e8","text2":"#d080a0","muted":"#6a3050","success":"#00d97e",
         "warning":"#f59e0b","error":"#ff3333","speak_bg":"#b01030","speak_hover":"#dc143c",
         "stop_bg":"#3a0018","stop_hover":"#5a0025","header_bg":"#000000","nav_btn":"#100008",
-        "nav_hover":"#200010","textarea_bg":"#080005","textarea_fg":"#ffe0e8",
+        "nav_hover":"#200010","hover":"#200010","textarea_bg":"#080005","textarea_fg":"#ffe0e8",
         "scrollbar":"#180010","cursor":"#ff4d70","sel_bg":"#3a0018","pill_bg":"#000000",
     },
     "yellow": {
@@ -583,7 +583,7 @@ THEMES = {
         "text":"#fffce0","text2":"#ffe066","muted":"#888840","success":"#00d97e",
         "warning":"#ffcc00","error":"#ef4444","speak_bg":"#ffe000","speak_hover":"#ffff44",
         "stop_bg":"#7a1515","stop_hover":"#c0392b","header_bg":"#0a0a00","nav_btn":"#1a1a00",
-        "nav_hover":"#2a2a00","textarea_bg":"#0d0d00","textarea_fg":"#fffce0",
+        "nav_hover":"#2a2a00","hover":"#2a2a00","textarea_bg":"#0d0d00","textarea_fg":"#fffce0",
         "scrollbar":"#1c1c00","cursor":"#ffff55","sel_bg":"#3a3400","pill_bg":"#0a0a00",
     },
 }
