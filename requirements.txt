@@ -2,7 +2,7 @@
 # Updated: 2026-05
 
 # ── Core TTS ──────────────────────────────────────────────────────────────────
-kokoro-onnx>=0.4.2          # Primary neural TTS engine (Kokoro 82M)
+kokoro-onnx>=0.5.0          # Primary neural TTS engine (Kokoro 82M)
 onnxruntime>=1.20.0         # ONNX inference runtime (CPU)
 # onnxruntime-openvino      # Intel GPU (OpenVINO) - install separately if needed
 

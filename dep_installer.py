@@ -33,7 +33,7 @@ USER_PKGS = STAMP_DIR / "site-packages"
 # critical=True → app cannot run without it
 PYTHON_DEPS = [
     # Core TTS
-    ("kokoro_onnx",        "kokoro-onnx>=0.4.2",        True),
+    ("kokoro_onnx",        "kokoro-onnx>=0.5.0",        True),
     ("onnxruntime",        "onnxruntime>=1.20.0",        True),
     ("numpy",              "numpy>=2.2.0",               True),
     # File extraction
@@ -69,7 +69,7 @@ SYSTEM_DEPS = [
 # for a specific feature, not the whole manifest.
 FEATURE_DEPS = {
     "edge_tts":      [("edge_tts", "edge-tts>=7.0.0")],
-    "kokoro":        [("kokoro_onnx", "kokoro-onnx>=0.4.2"),
+    "kokoro":        [("kokoro_onnx", "kokoro-onnx>=0.5.0"),
                       ("onnxruntime", "onnxruntime>=1.20.0")],
     "whisper":       [("faster_whisper", "faster-whisper")],
     "vosk":          [("vosk", "vosk")],

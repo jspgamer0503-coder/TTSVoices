@@ -98,7 +98,7 @@ ok "pip upgraded"
 # ── 6. Core TTS engine ──────────────────────────────────────────────────
 step "Installing Kokoro ONNX (primary TTS engine)"
 pip install --quiet \
-    "kokoro-onnx>=0.4.2" \
+    "kokoro-onnx>=0.5.0" \
     "onnxruntime>=1.20.0" \
     "numpy>=2.2.0" \
     && ok "Kokoro ONNX installed" \
