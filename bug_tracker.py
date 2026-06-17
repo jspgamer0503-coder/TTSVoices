@@ -23,24 +23,49 @@ import threading
 from pathlib import Path
 from collections import deque
 
-LOG_DIR = Path.home() / ".ttsvoices" / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    _LOG_DIR = Path.home() / ".ttsvoices" / "logs"
+    _LOG_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    import tempfile as _tf
+    _LOG_DIR = _tf.gettempdir()
+    _LOG_DIR = Path(_LOG_DIR) / ".ttsvoices" / "logs"
+    try:
+        _LOG_DIR.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        _LOG_DIR = Path("/tmp") / ".ttsvoices" / "logs"
+        try:
+            _LOG_DIR.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            _LOG_DIR = Path(os.devnull).parent
 
-_session_log  = LOG_DIR / f"session_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 _MAX_LOG_FILES = 10          # keep only last 10 session logs
 _errors        = deque(maxlen=500)  # auto-evicts oldest; prevents unbounded RAM growth
 _lock          = threading.Lock()
+_session_log   = None        # set lazily on first write
+_session_log_lock = threading.Lock()
+
+def _get_session_log():
+    global _session_log
+    if _session_log is None:
+        with _session_log_lock:
+            if _session_log is None:
+                _session_log = _LOG_DIR / f"session_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    return _session_log
 
 def _rotate_logs():
     """Keep only the _MAX_LOG_FILES most recent session logs to prevent disk bloat."""
     try:
-        logs = sorted(LOG_DIR.glob("session_*.log"), reverse=True)
+        logs = sorted(_LOG_DIR.glob("session_*.log"), reverse=True)
         for old in logs[_MAX_LOG_FILES:]:
             old.unlink(missing_ok=True)
     except Exception:
         pass
 
-_rotate_logs()  # Run once at import time
+try:
+    _rotate_logs()
+except Exception:
+    pass
 
 # Long-running sessions used to accumulate log files indefinitely because
 # _rotate_logs() only fired at module import. Track how many entries have
@@ -60,22 +85,30 @@ def _write(level: str, message: str, details: str = ""):
         "message":   message,
         "details":   details,
     }
+    line = json.dumps(entry) + "\n"
     with _lock:
         _errors.append(entry)
-        try:
-            with open(_session_log, "a", encoding="utf-8") as f:
-                f.write(json.dumps(entry) + "\n")
-        except OSError:
-            pass  # disk full / permissions — don't crash the app
-        # Opportunistic rotation so a long transcription session doesn't
-        # fill the disk with old session logs.
         _ENTRIES_SINCE_ROTATE += 1
-        if _ENTRIES_SINCE_ROTATE >= _ROTATE_EVERY:
+        should_rotate = _ENTRIES_SINCE_ROTATE >= _ROTATE_EVERY
+        if should_rotate:
             _ENTRIES_SINCE_ROTATE = 0
-            try:
-                _rotate_logs()
-            except Exception:
-                pass
+    try:
+        with open(_get_session_log(), "a", encoding="utf-8") as f:
+            f.write(line)
+    except OSError:
+        pass
+    if should_rotate:
+        try:
+            _rotate_logs()
+        except Exception:
+            pass
+    # Cap active log file at ~5 MB to prevent unbounded disk growth
+    try:
+        if _session_log and _session_log.stat().st_size > 5 * 1024 * 1024:
+            with _lock:
+                _session_log = None
+    except OSError:
+        pass
 
 
 def info(message: str):
@@ -118,15 +151,15 @@ def install_tkinter_exception_handler(root):
     are logged to the bug tracker instead of crashing silently or printing to
     stderr. Based on best practice: override Tk.report_callback_exception.
     """
+    _orig = getattr(root, 'report_callback_exception', None)
     def _tk_error_handler(exc_type, exc_value, exc_tb):
         tb_str = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
         critical(
             f"Unhandled Tkinter callback exception: {exc_value}",
             tb_str
         )
-        # Don't suppress — let default Tk handler also run
-        import tkinter as tk
-        tk.Tk.report_callback_exception(root, exc_type, exc_value, exc_tb)
+        if _orig:
+            _orig(exc_type, exc_value, exc_tb)
 
     try:
         root.report_callback_exception = _tk_error_handler
@@ -297,7 +330,8 @@ class HealthCheck:
         """Verify bookmark saves and loads correctly via config."""
         def _test():
             import json, tempfile, os
-            tmp = tempfile.mktemp(suffix=".json")
+            with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as _btf:
+                tmp = _btf.name
             cfg = {
                 "speed": 1.3, "pitch": 1.0, "volume": 63,
                 "voice_idx": 0, "theme": "dark", "provider": "CPU",
@@ -405,7 +439,7 @@ class HealthCheck:
             for _ in range(5):
                 audio_handler.stop_playback()
 
-        self._run("Audio: stop_playback() idempotent (10× rapid call)", _test)
+        self._run("Audio: stop_playback() idempotent (5× rapid call)", _test)
 
     def check_audio_export_empty(self):
         """export_wav([]) must return False without creating a file."""
@@ -413,7 +447,8 @@ class HealthCheck:
             import sys, os
             sys.path.insert(0, str(Path(__file__).parent))
             import audio_handler, tempfile
-            out = tempfile.mktemp(suffix=".wav")
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as _btf:
+                out = _btf.name
             result = audio_handler.export_wav([], out)
             assert result is False, "Expected False for empty chunk list"
             assert not os.path.exists(out), "File should not be created"
@@ -458,15 +493,16 @@ class HealthCheck:
             import sys, tempfile, os
             sys.path.insert(0, str(Path(__file__).parent))
             from file_extractor import extract_text
-            tmp = tempfile.mktemp(suffix=".xyz")
-            open(tmp, "w").close()
+            with tempfile.NamedTemporaryFile(suffix=".xyz", delete=False) as _btf:
+                tmp = _btf.name
             try:
                 extract_text(tmp)
                 raise AssertionError("Should have raised ValueError")
             except ValueError:
                 pass
             finally:
-                os.unlink(tmp)
+                if os.path.exists(tmp):
+                    os.unlink(tmp)
 
         self._run("File extractor: unsupported extension raises ValueError", _test)
 
@@ -562,15 +598,18 @@ class HealthCheck:
     def check_version_constant(self):
         """__version__ must exist in ttsvoices.py and be valid semver."""
         def _test():
-            import re
+            import ast, re
             src = (Path(__file__).parent / "ttsvoices.py").read_text(encoding="utf-8")
+            tree = ast.parse(src)
             found = False
-            for line in src.split("\n"):
-                if "__version__" in line and "=" in line:
-                    ver = line.split("=", 1)[1].strip().strip("\"'")
-                    assert re.match(r"\d+\.\d+\.\d+", ver), f"Not semver: {ver!r}"
-                    found = True
-                    break
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, ast.Name) and target.id == "__version__":
+                            ver = ast.literal_eval(node.value)
+                            assert re.match(r"\d+\.\d+\.\d+", ver), f"Not semver: {ver!r}"
+                            found = True
+                            break
             assert found, "Missing __version__ in ttsvoices.py"
         self._run("Versioning: __version__ semver constant exists", _test)
 
@@ -589,7 +628,8 @@ class HealthCheck:
                 return b.getvalue()
 
             import tempfile, os
-            out = tempfile.mktemp(suffix='.wav')
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as _btf:
+                out = _btf.name
             # First chunk 24000Hz, second 22050Hz
             ok = audio_handler.export_wav([_mk_wav(24000), _mk_wav(22050)], out)
             if ok and os.path.exists(out):
@@ -725,13 +765,13 @@ def get_errors() -> list:
 
 
 def get_log_path() -> str:
-    return str(_session_log)
+    return str(_get_session_log())
 
 
 def get_report() -> str:
     lines = [
         "TTS Voices 2.5.1 – Bug Report",
-        f"Session: {_session_log.name}",
+        f"Session: {_get_session_log().name}",
         "=" * 60,
     ]
     with _lock:
@@ -752,8 +792,8 @@ def clear_log():
     """
     with _lock:
         _errors.clear()
-        try:
-            with open(_session_log, "w", encoding="utf-8") as f:
-                f.write("")
-        except OSError:
-            pass
+    try:
+        with open(_get_session_log(), "w", encoding="utf-8") as f:
+            f.write("")
+    except OSError:
+        pass

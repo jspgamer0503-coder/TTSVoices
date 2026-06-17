@@ -1,6 +1,6 @@
 /*
  * audio_fast.c — Fast WAV concatenation and audio utilities for TTS Voices
- * Compiled as a shared library: gcc -O2 -shared -fPIC -o audio_fast.so audio_fast.c
+ * Compiled as a shared library: gcc -O2 -shared -fPIC -o audio_fast.so audio_fast.c -lm
  *
  * Maintained by the opencode AI assistant — see README.md.
  * Provides ~10-15x speedup over pure-Python WAV merging for large exports.
@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <math.h>
 
 /* ── WAV header (44 bytes, PCM little-endian) ─────────────────────────── */
 #pragma pack(push, 1)
@@ -49,6 +50,8 @@ int concat_wavs(const uint8_t **chunks, const uint32_t *chunk_sizes,
     if (!chunks || !chunk_sizes || n <= 0 || !out_buf || !out_size)
         return -1;
 
+    int skipped = 0;
+
     /* Read header from first chunk to get audio parameters */
     if (chunk_sizes[0] < 44) return -2;
     WavHeader ref;
@@ -59,6 +62,40 @@ int concat_wavs(const uint8_t **chunks, const uint32_t *chunk_sizes,
         memcmp(ref.wave, "WAVE", 4) != 0 ||
         memcmp(ref.fmt_id, "fmt ", 4) != 0) {
         return -3;
+    }
+
+    /* Validate format consistency across all chunks */
+    for (int i = 1; i < n; i++) {
+        if (chunk_sizes[i] < 44) { skipped++; continue; }
+        /* Find the "fmt " sub-chunk in this chunk */
+        const uint8_t *p = chunks[i] + 12;
+        const uint8_t *end = chunks[i] + chunk_sizes[i];
+        uint16_t num_channels = 0;
+        uint32_t sample_rate = 0;
+        uint16_t bits_per_sample = 0;
+        int fmt_found = 0;
+        while (p + 8 <= end) {
+            char id[4];
+            uint32_t sz;
+            memcpy(id, p, 4);
+            memcpy(&sz, p + 4, 4);
+            if (memcmp(id, "fmt ", 4) == 0 && sz >= 16 && (end - p) >= 24) {
+                memcpy(&num_channels,   p + 10, 2);
+                memcpy(&sample_rate,    p + 12, 4);
+                memcpy(&bits_per_sample, p + 22, 2);
+                fmt_found = 1;
+                break;
+            }
+            if (sz > (uint32_t)(end - p - 8)) break;
+            p += 8 + sz;
+            if (sz & 1) p++;
+        }
+        if (!fmt_found ||
+            num_channels   != ref.num_channels ||
+            sample_rate    != ref.sample_rate ||
+            bits_per_sample != ref.bits_per_sample) {
+            return -7;
+        }
     }
 
     /* Calculate total PCM data bytes */
@@ -132,6 +169,11 @@ int concat_wavs(const uint8_t **chunks, const uint32_t *chunk_sizes,
         }
     }
 
+    if (skipped > 0) {
+        free(buf);
+        return -8;
+    }
+
     *out_buf  = buf;
     *out_size = out_total;
     return 0;
@@ -140,6 +182,9 @@ int concat_wavs(const uint8_t **chunks, const uint32_t *chunk_sizes,
 /* ── apply_volume ──────────────────────────────────────────────────────────
  * Scale 16-bit PCM samples in-place by a floating-point gain (0.0–2.0).
  * Much faster than numpy for large buffers.
+ *
+ * NOTE: This function assumes little-endian int16 samples (WAV PCM format).
+ * On big-endian hosts, byteswapping is required before calling.
  *
  *   pcm_data  — pointer to raw 16-bit PCM samples (little-endian)
  *   n_samples — number of int16 samples (bytes / 2)
@@ -151,7 +196,7 @@ void apply_volume(int16_t *pcm_data, uint32_t n_samples, float gain) {
         float v = pcm_data[i] * gain;
         if (v >  32767.0f) v =  32767.0f;
         if (v < -32768.0f) v = -32768.0f;
-        pcm_data[i] = (int16_t)v;
+        pcm_data[i] = (int16_t)lrintf(v);
     }
 }
 
@@ -162,9 +207,3 @@ void apply_volume(int16_t *pcm_data, uint32_t n_samples, float gain) {
 void free_buf(uint8_t *buf) {
     free(buf);
 }
-
-/* ── theme_apply_colors ────────────────────────────────────────────────────
- * No-op stub — actual theme batch update is done in Python using the
- * widget registry pattern. This C file remains for WAV/volume ops.
- * Keeping the file structure intact for future C optimizations.
- */

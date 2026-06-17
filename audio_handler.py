@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import atexit
 import bug_tracker
 
 # ── Playback state ────────────────────────────────────────────────────────────
@@ -77,7 +78,7 @@ def _apply_volume_to_wav(wav_data: bytes) -> bytes:
             try:
                 import numpy as np
                 samples    = np.frombuffer(pcm, dtype=np.int16).copy()
-                scaled     = (samples * gain).clip(-32768, 32767).astype(np.int16)
+                scaled     = np.round(samples * gain).clip(-32768, 32767).astype(np.int16)
                 scaled_pcm = scaled.tobytes()
             except ImportError:
                 # ── Path 3: pure Python array ─────────────────────────────
@@ -94,7 +95,8 @@ def _apply_volume_to_wav(wav_data: bytes) -> bytes:
             wf.setframerate(sr)
             wf.writeframes(scaled_pcm)
         return buf2.getvalue()
-    except Exception:
+    except Exception as _vole:
+        bug_tracker.warning(f"Volume scaling failed, returning unscaled audio: {_vole}")
         return wav_data
 
 def begin_session():
@@ -122,6 +124,7 @@ def play_wav(wav_data: bytes) -> bool:
 
     # Write to temp file (all CLI tools need a file path)
     tmp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+    atexit.register(lambda p=tmp.name: os.path.exists(p) and os.unlink(p))
     try:
         tmp.write(scaled)
         tmp.flush()
@@ -182,12 +185,13 @@ def _play_file(path: str) -> bool:
     if _probed_backend is not None:
         cmd = _probed_backend + [path]
         ok = _run_backend(cmd)
-        if ok is not None:   # None = was stopped; False = backend broke
-            return ok
-        # Backend stopped (user pressed stop) — that's a valid return
+        if ok is True:
+            return True
+        if ok == -1:
+            return False
         if ok is False and _stop_event.is_set():
             return False
-        # Backend broke — fall through to re-probe
+        # Backend broke (not stopped) — fall through to re-probe
         _probed_backend = None
         bug_tracker.warning(f"Cached backend failed, re-probing...")
 
@@ -206,6 +210,8 @@ def _play_file(path: str) -> bool:
             _probed_backend = base_cmd
             bug_tracker.info(f"Audio backend selected: {tool}")
             return True
+        elif ok == -1:
+            return False
         elif ok is False and _stop_event.is_set():
             return False   # User stopped — don't try more backends
         elif ok is False:
@@ -223,6 +229,7 @@ def _run_backend(cmd: list):
       True   — played successfully
       False  — failed (bad exit code, exception, or user stopped)
       None   — tool not found
+      -1     — busy (another playback is already running)
     """
     global _current_proc
     import shutil
@@ -233,10 +240,13 @@ def _run_backend(cmd: list):
         with _play_lock:
             if _stop_event.is_set():
                 return False
+            if _current_proc is not None and _current_proc.poll() is None:
+                return -1
             proc = subprocess.Popen(cmd,
                                     stdout=subprocess.DEVNULL,
                                     stderr=subprocess.DEVNULL)
             _current_proc = proc
+            _poll_sleep.clear()
 
         global _playback_start_time
         _playback_start_time = time.monotonic()
@@ -273,6 +283,7 @@ def stop_playback():
     global _current_proc
     with _play_lock:
         _stop_event.set()
+        _poll_sleep.set()
         proc = _current_proc
     if proc and proc.poll() is None:
         try:
@@ -288,6 +299,30 @@ def stop_playback():
 # ── System mixer for real-time volume control ─────────────────────────────────
 _sys_volume_pct   = 100    # last value sent to system mixer
 _sys_volume_lock  = threading.Lock()
+_sys_volume_event = threading.Event()
+
+def _sys_volume_worker():
+    while True:
+        _sys_volume_event.wait()
+        _sys_volume_event.clear()
+        with _sys_volume_lock:
+            pct = _sys_volume_pct
+        try:
+            r = subprocess.run(
+                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{pct}%"],
+                capture_output=True, timeout=2)
+            if r.returncode == 0:
+                continue
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        try:
+            subprocess.run(
+                ["amixer", "set", "Master", f"{pct}%"],
+                capture_output=True, timeout=2)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+threading.Thread(target=_sys_volume_worker, daemon=True).start()
 
 def set_system_volume(pct: int):
     """Set system output volume in real-time via pactl or amixer.
@@ -300,26 +335,7 @@ def set_system_volume(pct: int):
         if pct == _sys_volume_pct:
             return
         _sys_volume_pct = pct
-
-    def _try():
-        try:
-            # PulseAudio / PipeWire (most Linux desktops)
-            r = subprocess.run(
-                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{pct}%"],
-                capture_output=True, timeout=2)
-            if r.returncode == 0:
-                return
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
-        try:
-            # ALSA fallback
-            subprocess.run(
-                ["amixer", "set", "Master", f"{pct}%"],
-                capture_output=True, timeout=2)
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
-
-    threading.Thread(target=_try, daemon=True).start()
+    _sys_volume_event.set()
 
 
 _audio_fast_lib  = None   # ctypes CDLL, or False if unavailable
@@ -333,7 +349,7 @@ def _load_audio_fast():
     try:
         import ctypes, ctypes.util
         from pathlib import Path as _Path
-        so = _Path(__file__).parent / "audio_fast.so"
+        so = _Path(__file__).resolve().parent / "audio_fast.so"
         if so.exists():
             lib = ctypes.CDLL(str(so))
             # concat_wavs signature
@@ -347,6 +363,12 @@ def _load_audio_fast():
             ]
             lib.free_buf.restype  = None
             lib.free_buf.argtypes = [ctypes.c_char_p]
+            lib.apply_volume.restype  = None
+            lib.apply_volume.argtypes = [
+                ctypes.POINTER(ctypes.c_int16),
+                ctypes.c_uint32,
+                ctypes.c_float,
+            ]
             _audio_fast_lib = lib
             bug_tracker.info("audio_fast.so loaded — C-accelerated WAV concat active")
         else:
@@ -408,25 +430,35 @@ def export_wav(wav_chunks: list, output_path: str, progress_cb=None) -> bool:
             return True
 
         # ── Fallback: pure Python ───────────────────────────────────────────
-        all_data    = b""
+        parts       = []
         sample_rate = None
         channels    = 1
         sampwidth   = 2
         for idx, chunk in enumerate(valid_chunks):
             try:
                 with wave.open(io.BytesIO(chunk)) as wf:
+                    sr  = wf.getframerate()
+                    ch  = wf.getnchannels()
+                    sw  = wf.getsampwidth()
                     if sample_rate is None:
-                        sample_rate = wf.getframerate()
-                        channels    = wf.getnchannels()
-                        sampwidth   = wf.getsampwidth()
-                    all_data += wf.readframes(wf.getnframes())
+                        sample_rate = sr
+                        channels    = ch
+                        sampwidth   = sw
+                    elif sr != sample_rate or ch != channels or sw != sampwidth:
+                        bug_tracker.warning(
+                            f"Skipping chunk {idx}: format mismatch "
+                            f"(sr={sr} vs {sample_rate}, ch={ch} vs {channels}, sw={sw} vs {sampwidth})"
+                        )
+                        continue
+                    parts.append(wf.readframes(wf.getnframes()))
             except Exception as e:
                 bug_tracker.warning(f"Skipping corrupt chunk: {e}")
             if progress_cb:
                 try: progress_cb(idx)
                 except Exception: pass
-        if not all_data:
+        if not parts:
             return False
+        all_data = b"".join(parts)
         sample_rate = sample_rate or 24000
         with wave.open(output_path, 'wb') as out:
             out.setnchannels(channels)
@@ -463,7 +495,7 @@ def export_mp3(wav_chunks: list, output_path: str, progress_cb=None) -> bool:
              "-codec:a", "libmp3lame", "-qscale:a", "2", output_path],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            timeout=120
+            timeout=600
         )
         return result.returncode == 0
     except Exception as e:
@@ -479,4 +511,4 @@ def export_mp3(wav_chunks: list, output_path: str, progress_cb=None) -> bool:
 
 def set_volume(vol_percent: int):
     """Legacy shim: accepts 0-100."""
-    set_volume_level(int(vol_percent * 327.67))
+    set_volume_level(int(round(vol_percent * 327.67)))

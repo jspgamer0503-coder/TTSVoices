@@ -27,7 +27,7 @@ def build():
     print("  Compiling audio_fast.c …")
     try:
         r = subprocess.run(
-            ["gcc", "-O2", "-shared", "-fPIC", "-o", str(OUT), str(SRC)],
+            ["gcc", "-O2", "-shared", "-fPIC", "-o", str(OUT), str(SRC), "-lm"],
             capture_output=True, text=True, timeout=30
         )
         if r.returncode == 0:

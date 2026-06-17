@@ -10,6 +10,9 @@ dist/
 venv/
 env/
 
+# Binary/compiled artifacts
+*.so
+
 # Allow precompiled C extensions shipped with the project
 !audio_fast.so
 
