@@ -10,9 +10,9 @@ from tkinter import ttk, messagebox
 from pathlib import Path
 
 # ── Semantic versioning ────────────────────────────────────────────────────
-__version__   = "2.5.1"
+__version__   = "2.5.2"
 VERSION_TUPLE = (2, 5, 1)
-VERSION_DATE  = "2026-06-14"
+VERSION_DATE  = "2026-06-16"
 _STARTUP_T0   = time.monotonic()   # measure cold-start time
 APP_NAME      = "TTS Voices"
 

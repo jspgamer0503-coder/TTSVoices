@@ -1,4 +1,4 @@
-# TTS Voices 2.5.1
+# TTS Voices 2.5.2
 **Unlimited Text-to-Speech Engine for Linux**
 
 A professional-grade Linux desktop TTS application with neural voice synthesis,
@@ -13,9 +13,9 @@ multi-format document support, and a modern dark UI.
 > the direction of the project owner.
 >
 > All releases from **v2.3.0 onward** have been developed, audited, and
-> shipped with AI assistance. The current 2.5.1 release adds the missing
-> hover color key fix, updates kokoro-onnx to 0.5.0, and improves overall
-> stability over the 2.5.0 release.
+> shipped with AI assistance. The current 2.5.2 release fixes critical
+> bugs in the audio playback path, C extension memory safety, and
+> improves overall stability over the 2.5.1 release.
 >
 > **Project owner:** overseer (this repository)
 > **Active maintainer:** opencode AI assistant (v2.3.0 – present)
@@ -228,7 +228,7 @@ The check reads `VERSION` from the GitHub repo once at startup (3-second delay s
 The header subtitle shows live system metrics in a compact, custom format:
 
 ```
-v2.5.1 · ▶0 · CPU ▁▃▅▂▁▃▅▂ 26% · RAM 2.3/7.5G · DSK 69% · ▲35B ▼309B
+v2.5.2 · ▶0 · CPU ▁▃▅▂▁▃▅▂ 26% · RAM 2.3/7.5G · DSK 69% · ▲35B ▼309B
 ```
 
 - **Per-core block characters** (▁▂▃▄▅) – one per logical core

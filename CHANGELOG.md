@@ -5,13 +5,79 @@ All versions in reverse chronological order.
 > is performed by the [opencode](https://opencode.ai) AI coding assistant,
 > under the direction of the project owner. Earlier versions (v1.x – v2.0)
 > were developed by prior contributors; see git history for full
-> authorship. The current 2.5.1 release adds the missing hover color key
-> fix and updates kokoro-onnx to 0.5.0. The license (MIT) and copyright
-> line at the top of LICENSE remain unchanged.
+> authorship. The current 2.5.2 release fixes critical bugs in the audio
+> playback path and C extension memory safety. The license (MIT) and
+> copyright line at the top of LICENSE remain unchanged.
 
 ---
 
-## [2.5.1] — 2026-06-14  ← CURRENT
+## [2.5.2] — 2026-06-16  ← CURRENT
+
+### Bug Fixes (codebase audit)
+
+**audio_handler.py**
+
+- **C1: Dead re-probe path** — `_play_file` now correctly distinguishes
+  `True`/`False`/`None` returns from `_run_backend`. When a cached backend
+  fails for a non-stop reason, the re-probe logic is actually reached.
+- **C2: Play-lock race** — `_run_backend` now rejects new playback if
+  `_current_proc` is still running, preventing overlapping audio.
+- **C4: Missing ctypes argtypes** — `apply_volume` now has fully declared
+  `restype` and `argtypes`, eliminating UB on non-standard platforms.
+- **H3: Format consistency** — `export_wav` validates per-chunk sample
+  rate / channels / sample width, skipping mismatched chunks with a warning.
+- **M1: Immediate stop** — `stop_playback()` now calls `_poll_sleep.set()`
+  to interrupt the polling loop immediately (sub-1ms vs 50ms delay).
+- **M2: SIGKILL temp file leak** — `atexit.register` with existence check
+  ensures cleanup even on hard crash.
+- **M3: Symlinked installs** — `__file__` resolved via `.resolve()` before
+  looking for `audio_fast.so`.
+- **M4: Volume slider race** — replaced thread-per-call with a single
+  `_sys_volume_worker` daemon thread woken by `threading.Event`.
+- **M6: O(n²) string concat** — `export_wav` fallback now uses
+  `b"".join(parts)` instead of repeated `bytes +=`.
+- **L1: Numpy rounding** — `np.round()` applied before `.astype(np.int16)`
+  for consistency with the C extension's `lrintf`.
+- **L2: FFmpeg timeout** — bumped from 120s to 600s for long audiobooks.
+- **C2: System volume blast** — removed `_sys_volume_event.set()` from
+  worker startup, preventing 100% volume blast on import.
+
+**audio_fast.c**
+
+- **C3: Format consistency** — `concat_wavs` now validates every chunk's
+  `fmt ` sub-chunk against the reference, returning `-7` on mismatch.
+- **H2: Round-to-nearest** — `apply_volume` uses `lrintf()` instead of
+  C truncation, eliminating small DC bias.
+- **M7: Skipped chunk feedback** — returns `-8` if any chunks < 44 bytes
+  were dropped (caller can fall back to Python).
+- **C1: Heap OOB read** — added `(end - p) >= 24` bounds check before
+  reading `fmt ` fields in format validation loop.
+- **L1: Triple-counted skipped** — `skipped` variable now only
+  incremented in the validation pass, not all three loops.
+
+**bug_tracker.py**
+
+- **H4: I/O under lock** — JSON line built outside the lock; only deque
+  append and counter increment remain locked.
+- **H5: Lazy session log** — `_session_log` created on first write via
+  `_get_session_log()`, supporting long-running processes.
+- **H6: Import crash-safe** — all `mkdir` calls wrapped in `try/except`;
+  ultimate fallback to `os.devnull.parent`.
+- **M5: Tk handler chain** — original `report_callback_exception` captured
+  before override and chained properly.
+- **H1: 5 MB log cap** — active log file size checked after each write;
+  exceeding 5 MB forces a new session log.
+- **M1: Double-checked locking** — `_get_session_log()` uses a dedicated
+  lock for thread-safe lazy init.
+- **L2: Deprecated mktemp** — all health check temp files use
+  `NamedTemporaryFile`.
+
+**build_audio_fast.py** — added `-lm` link flag for `lrintf`.
+**.gitignore** — added `*.so` pattern before `!audio_fast.so` re-include.
+
+---
+
+## [2.5.1] — 2026-06-14
 
 ### Bug Fixes
 
