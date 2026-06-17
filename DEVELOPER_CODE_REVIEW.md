@@ -1,13 +1,13 @@
-# TTS Voices 2.5.1 — Developer Code Review & Architecture Guide
+# TTS Voices 2.5.2 — Developer Code Review & Architecture Guide
 
 **Originally prepared by:** Claude Sonnet 4.6 (Anthropic) — v2.3.1 baseline
-**Current version:** 2.5.1
+**Current version:** 2.5.2
 **Last updated:** June 2026
 **Maintained by:** opencode AI assistant — see README.md "Development & Maintenance"
 
 > Note: The architecture described below applies to the v2.3.1 baseline.
-> The current 2.5.1 release adds the missing hover color key fix,
-> updates kokoro-onnx to 0.5.0, and improves overall stability.
+> The current 2.5.2 release fixes critical bugs in the audio playback path,
+> improves C extension memory safety, and enhances overall stability.
 > See `CHANGELOG.md` for the full diff.
 
 ---

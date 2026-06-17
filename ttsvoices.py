@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""TTS Voices 2.5.1 – Unlimited Text-to-Speech Engine for Linux
+"""TTS Voices 2.5.2 – Unlimited Text-to-Speech Engine for Linux
 
 Maintained by the opencode AI assistant under the direction of the project
 owner (overseer). See README.md "Development & Maintenance" for full
@@ -11,7 +11,7 @@ from pathlib import Path
 
 # ── Semantic versioning ────────────────────────────────────────────────────
 __version__   = "2.5.2"
-VERSION_TUPLE = (2, 5, 1)
+VERSION_TUPLE = (2, 5, 2)
 VERSION_DATE  = "2026-06-16"
 _STARTUP_T0   = time.monotonic()   # measure cold-start time
 APP_NAME      = "TTS Voices"
@@ -174,7 +174,7 @@ class ResourceMonitor:
       high   → animations suspended, right panel hints compacted, warning shown
 
     Display format (subtitle label under the logo):
-      v2.5.1 · ▶0 · CPU ▁▃▅▂▁▃▅▂ 23% · RAM 4.2/7.4G · DSK 73% · ▲12M ▼3M
+          v2.5.2 · ▶0 · CPU ▁▃▅▂▁▃▅▂ 23% · RAM 4.2/7.4G · DSK 73% · ▲12M ▼3M
             ▲▲    ▲▲▲▲▲▲▲▲▲▲▲▲▲  ▲▲▲ ▲▲▲▲▲▲▲▲ ▲▲▲ ▲▲▲  ▲▲▲▲▲▲▲▲
 
     If psutil is not installed the monitor falls back to /proc parsing —
@@ -3784,7 +3784,7 @@ class TTSVoicesApp:
         highlight loop must be suppressed during preview — otherwise the
         loop reads stale chunk data from a previous Speak run and
         highlights random words in the user's input (the "skeleton"
-        bug from the v2.5.1 screenshot).
+        bug from the v2.5.2 screenshot).
 
         The status pill shows both the engine and the voice name so
         the user can verify which engine is actually being used
@@ -7291,7 +7291,7 @@ class TTSVoicesApp:
         Renders a rich per-core + RAM + disk + network display into the
         subtitle label under the logo. The format is:
 
-          v2.5.1 · ▶0 · CPU ▁▃▅▂▁▃▅▂ 23% · RAM 4.2/7.4G · DSK 73% · ▲12M ▼3M
+      v2.5.2 · ▶0 · CPU ▁▃▅▂▁▃▅▂ 23% · RAM 4.2/7.4G · DSK 73% · ▲12M ▼3M
 
         The per-core block characters show load distribution at a glance —
         no other app in this category does that. Colour of the whole line

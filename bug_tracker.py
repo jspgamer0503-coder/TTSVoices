@@ -1,5 +1,5 @@
 """
-TTS Voices 2.5.1 - Bug Tracker Module
+TTS Voices 2.5.2 - Bug Tracker Module
 
 Maintained by the opencode AI assistant — see README.md.
 Centralised error logging, crash recovery, self-tests, and health checks.
@@ -770,7 +770,7 @@ def get_log_path() -> str:
 
 def get_report() -> str:
     lines = [
-        "TTS Voices 2.5.1 – Bug Report",
+        "TTS Voices 2.5.2 – Bug Report",
         f"Session: {_get_session_log().name}",
         "=" * 60,
     ]

@@ -1,5 +1,5 @@
 """
-TTS Voices 2.5.1 - Custom Exceptions
+TTS Voices 2.5.2 - Custom Exceptions
 
 Maintained by the opencode AI assistant — see README.md.
 Provides typed exceptions for cleaner error handling across all modules.

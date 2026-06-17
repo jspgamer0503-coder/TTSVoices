@@ -1,5 +1,5 @@
 """
-TTS Voices 2.5.1 - Audio Handler (Lightweight Edition)
+TTS Voices 2.5.2 - Audio Handler (Lightweight Edition)
 
 Maintained by the opencode AI assistant — see README.md.
 Uses system audio tools (aplay/paplay/ffplay) — no pygame dependency.

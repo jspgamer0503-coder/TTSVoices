@@ -95,7 +95,7 @@ def _manifest_hash():
     return hashlib.sha1(repr(sorted(items)).encode()).hexdigest()[:10]
 
 def _stamp_path():
-    return STAMP_DIR / f".deps_ok_2.5.1_{_manifest_hash()}"
+    return STAMP_DIR / f".deps_ok_2.5.2_{_manifest_hash()}"
 
 def _is_stamped():
     """True if the current manifest's stamp file exists."""
