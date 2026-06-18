@@ -77,7 +77,7 @@ _ROTATE_EVERY = 200   # ~ every 200 log lines
 # ── Core logging ──────────────────────────────────────────────────────────────
 
 def _write(level: str, message: str, details: str = ""):
-    global _ENTRIES_SINCE_ROTATE
+    global _ENTRIES_SINCE_ROTATE, _session_log
     timestamp = datetime.datetime.now().isoformat()
     entry = {
         "timestamp": timestamp,

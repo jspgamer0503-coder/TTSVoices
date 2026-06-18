@@ -10,9 +10,9 @@ from tkinter import ttk, messagebox
 from pathlib import Path
 
 # ── Semantic versioning ────────────────────────────────────────────────────
-__version__   = "2.5.2"
-VERSION_TUPLE = (2, 5, 2)
-VERSION_DATE  = "2026-06-16"
+ __version__   = "2.5.3"
+ VERSION_TUPLE = (2, 5, 3)
+ VERSION_DATE  = "2026-06-17"
 _STARTUP_T0   = time.monotonic()   # measure cold-start time
 APP_NAME      = "TTS Voices"
 
@@ -117,18 +117,10 @@ def _load_engines_background():
 
 CONFIG_DIR  = Path.home() / ".ttsvoices"
 CONFIG_FILE  = CONFIG_DIR / "config.json"
-PLUGINS_DIR  = CONFIG_DIR / "plugins"
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-# Plugins dir: owner-only (0700) so other local users cannot drop malicious
-# .py files that would execute with the victim's privileges on next launch.
-PLUGINS_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
-try:
-    import os as _os; _os.chmod(PLUGINS_DIR, 0o700)
-except Exception:
-    pass
 
 DEFAULT_CONFIG = {
-    "speed": 1.3, "pitch": 1.0, "volume": 63, "voice_idx": 0,
+    "speed": 1.0, "pitch": 1.0, "volume": 100, "voice_idx": 0,
     "theme": "dark", "provider": "CPU", "highlight_offset": 150,
     "auto_update_check": True,
     "cloud_tts_enabled": False,  # local-first: Edge TTS (Cloud) hidden by default
@@ -600,7 +592,7 @@ def load_config():
                 data = json.load(_f)
             merged = {**DEFAULT_CONFIG, **data}
             # Migrate old 32767-scale or zero volume to sensible default
-            vol = merged.get("volume", 63)
+            vol = merged.get("volume", 100)
             if vol > 100:
                 vol = max(1, int(vol / 327.67))
             if vol == 0:
@@ -647,6 +639,8 @@ class _VirtualFileDialog:
         ".pdf":"📄",".docx":"📝",".doc":"📝",".epub":"📖",
         ".txt":"📃",".md":"📃",".html":"🌐",".htm":"🌐",
         ".rtf":"📝",".odt":"📝",".csv":"📊",
+        ".png":"🖼",".jpg":"🖼",".jpeg":"🖼",".bmp":"🖼",
+        ".gif":"🖼",".tiff":"🖼",".tif":"🖼",".webp":"🖼",
     }
     AUDIO_ICONS = {
         ".mp3":"🎵",".wav":"🎵",".m4a":"🎵",".ogg":"🎵",
@@ -1383,9 +1377,14 @@ class TTSFileDialog(_VirtualFileDialog):
     def _build_sidebar_extra(self, sb):
         tk.Label(sb, text="FORMATS", font=("Courier New",7,"bold"),
                  fg=C["muted"], bg=C["surface"]).pack(anchor="w", padx=12)
-        tk.Label(sb, text="PDF  DOCX  DOC\nEPUB HTML  RTF\nODT  TXT   MD  CSV",
+        tk.Label(sb, text="PDF  DOCX  DOC  EPUB\nHTML RTF  ODT  TXT\nMD   CSV",
                  font=("Courier New",8), fg=C["muted"], bg=C["surface"],
-                 justify="left").pack(anchor="w", padx=14, pady=6)
+                 justify="left").pack(anchor="w", padx=14, pady=4)
+        tk.Label(sb, text="IMAGES (OCR)", font=("Courier New",7,"bold"),
+                 fg=C["muted"], bg=C["surface"]).pack(anchor="w", padx=12, pady=(8,0))
+        tk.Label(sb, text="PNG  JPG  JPEG  BMP\nGIF  TIFF  WEBP",
+                 font=("Courier New",8), fg=C["muted"], bg=C["surface"],
+                 justify="left").pack(anchor="w", padx=14, pady=4)
 
     def _build_bottom_bar(self, bot):
         tk.Label(bot, text="Filter:", font=("Courier New",9),
@@ -1393,7 +1392,7 @@ class TTSFileDialog(_VirtualFileDialog):
         fc = ttk.Combobox(bot, textvariable=self._filter_var, state="readonly",
                           font=("Courier New",8), width=18,
                           values=["All supported","PDF","Word","EPUB",
-                                  "HTML","Text","All files"])
+                                  "HTML","Text","Images","All files"])
         fc.pack(side="left", padx=(0,14))
         fc.bind("<<ComboboxSelected>>", lambda _: self._go(self._cur))
 
@@ -1409,6 +1408,7 @@ class TTSFileDialog(_VirtualFileDialog):
             "EPUB":          {".epub"},
             "HTML":          {".html",".htm"},
             "Text":          {".txt",".md"},
+            "Images":        {".png",".jpg",".jpeg",".bmp",".gif",".tiff",".tif",".webp"},
             "All files":     None,
         }
         return M.get(filt, set(doc_exts))
@@ -2924,22 +2924,9 @@ class AudioToTextWindow:
     def _show_setup_hint(self, pkg: str = None):
         """Show install instructions and a one-click Install button."""
         if pkg:
-            hint = (
-                f"'{pkg}' is not installed.\n\n"
-                f"Click the Install button to install it automatically,\n"
-                f"or run in a terminal:\n\n"
-                f"  pip install {pkg}\n\n"
-                f"After installing, click Transcribe again."
-            )
+            hint = f"'{pkg}' not installed. Click Transcribe to auto-install."
         else:
-            hint = (
-                "No transcription engine is installed.\n\n"
-                "Install one of the following:\n\n"
-                "  pip install faster-whisper   (best quality, offline)\n"
-                "  pip install vosk             (lightweight, offline)\n"
-                "  pip install SpeechRecognition (online via Google)\n\n"
-                "Or click an Install button below, then click Transcribe again."
-            )
+            hint = "No transcription engine installed. Click Transcribe to auto-install."
         try:
             def _do():
                 self._ta.delete("1.0", "end")
@@ -2976,7 +2963,7 @@ class AudioToTextWindow:
         def _worker():
             try:
                 r = subprocess.run(
-                    [sys.executable, "-m", "pip", "install", pkg, "--quiet"],
+                    [sys.executable, "-m", "pip", "install", pkg, "--quiet", "--break-system-packages"],
                     capture_output=True, text=True, timeout=300)
                 if r.returncode == 0:
                     def _ok():
@@ -3071,7 +3058,6 @@ class TTSVoicesApp:
         self._all_voices  = []
         self._stop_flag   = threading.Event()
         self._is_speaking = False
-        self._fire_plugin_cbs('_plugin_speak_stop_cbs')
         self._is_exporting = False
         self._wav_buffer          = []
         self._current_file         = ""
@@ -3110,10 +3096,15 @@ class TTSVoicesApp:
         try:
             self.root.tk.call("tk", "appname", "ttsvoices")
             self.root.wm_iconname("TTS Voices")
-            icon_path = Path(_APP_DIR) / "ttsvoices_icon.png"
-            if icon_path.is_file():
-                self._icon_img = tk.PhotoImage(file=str(icon_path))
-                self.root.iconphoto(True, self._icon_img)
+            icon_dir = Path(_APP_DIR)
+            icons = []
+            for size in (16, 32, 48, 64, 128, 256):
+                p = icon_dir / f"ttsvoices_icon_{size}.png"
+                if p.is_file():
+                    icons.append(tk.PhotoImage(file=str(p)))
+            if icons:
+                self._icon_imgs = icons  # keep refs
+                self.root.iconphoto(True, *icons)
         except Exception:
             pass
 
@@ -3129,7 +3120,7 @@ class TTSVoicesApp:
 
         self.speed_var    = tk.DoubleVar(value=self.cfg.get("speed", 1.3))
         self.pitch_var    = tk.DoubleVar(value=self.cfg.get("pitch", 1.0))
-        raw_vol = self.cfg.get("volume", 63)
+        raw_vol = self.cfg.get("volume", 100)
         if raw_vol > 100:
             raw_vol = max(1, int(raw_vol / 327.67))
         self.volume_var   = tk.IntVar(value=raw_vol)
@@ -3139,6 +3130,13 @@ class TTSVoicesApp:
 
         self._style_ttk()
         self._build_ui()
+
+        # ── Keyboard shortcuts ──────────────────────────────────────────────
+        self.root.bind("<Control-Return>", lambda _: self._on_speak())
+        self.root.bind("<Control-l>",      lambda _: self._clear_text())
+        self.root.bind("<Control-o>",      lambda _: self._load_file())
+        self.root.bind("<Control-Shift-E>",lambda _: self._export_wav())
+        self.root.bind("<Escape>",         lambda _: self._on_stop())
 
         # Show loading state in status pill immediately
         self._set_status("LOADING…", C["warning"])
@@ -3269,8 +3267,6 @@ class TTSVoicesApp:
         self.root.after(100, self._apply_volume)
 
         startup_ms = (time.monotonic() - _STARTUP_T0) * 1000
-        # Load plugins from ~/.ttsvoices/plugins/
-        self._load_plugins()
 
         # Kick off update check (respects auto_update_check toggle)
         self._start_update_check_if_enabled()
@@ -3329,16 +3325,10 @@ class TTSVoicesApp:
 
         logo = tk.Frame(self._hdr, bg=C["header_bg"])
         logo.pack(side="left", padx=16, pady=8)
-        tk.Label(logo, text="🔊", font=("Segoe UI Emoji", 18),
-                 fg=C["accent2"], bg=C["header_bg"]).pack(side="left", padx=(0, 8))
         tf = tk.Frame(logo, bg=C["header_bg"])
         tf.pack(side="left")
         tk.Label(tf, text="TTS Voices", font=("Segoe UI", 15, "bold"),
                  fg=C["text"], bg=C["header_bg"]).pack(anchor="w")
-        self._local_badge = tk.Label(tf, text="🛡 LOCAL-FIRST",
-                 font=("Courier New", 7, "bold"),
-                 fg=C["success"], bg=C["header_bg"])
-        self._local_badge.pack(anchor="w")
         self._subtitle_lbl = tk.Label(tf,
                  text=f"v{__version__}  ·  Unlimited Audio Generation  ·  CPU 0%  RAM 0%",
                  font=("Courier New", 7, "bold"),
@@ -3347,7 +3337,6 @@ class TTSVoicesApp:
 
         nav = tk.Frame(self._hdr, bg=C["header_bg"])
         nav.pack(side="right", padx=10, pady=6)
-        self._nav_frame = nav   # exposed for plugin add_nav_button() API
 
         self._nav_btns = []
         self._make_nav_btn(nav, "⚙ Settings",      self._open_settings,
@@ -3362,8 +3351,6 @@ class TTSVoicesApp:
                            tooltip="Download and manage TTS voice models")
         self._make_nav_btn(nav, "🐞 Bug Log",        self._open_bug_tracker,
                            tooltip="View session log and error reports")
-        self._make_nav_btn(nav, "⊕ Plugins", self._open_plugins_manager,
-                           tooltip="Install, enable or disable plugins")
         self._make_nav_btn(nav, "ℹ About",    self._show_about_dialog,
                            tooltip="Version info, credits, and logo")
         self._update_btn = self._make_nav_btn(nav, "⟳ Updates", self._on_update_btn_click,
@@ -3425,7 +3412,7 @@ class TTSVoicesApp:
         self._word_lbl.pack(side="left", padx=4)
         # Bookmark indicator — shown when a save point is active
         bf = tk.Frame(top_bar, bg=C["bg"]); bf.pack(side="right")
-        self._clear_btn = GlowButton(bf, text="✕ Clear", command=self._clear_text,
+        self._clear_btn = GlowButton(bf, text="Clear", command=self._clear_text,
                    normal_bg=C["surface2"], hover_bg=C["border"],
                    fg=C["text2"], font=("Courier New",8),
                    tooltip="Clear all text in the editor")
@@ -4108,7 +4095,6 @@ class TTSVoicesApp:
         ref_audio_path = ref_audio.get().strip() if ref_audio else ""
 
         self._is_speaking = True
-        self._fire_plugin_cbs('_plugin_speak_start_cbs')
         audio_handler.begin_session()   # arm stop-flag BEFORE worker starts
         self._stop_flag.clear()
         self._wav_buffer.clear()
@@ -5270,10 +5256,6 @@ class TTSVoicesApp:
                      fg=C["warning"], bg=C["bg"], wraplength=420,
                      justify="left").pack(anchor="w", pady=(0,8))
 
-        tk.Label(body, text="No local GPU provider found. Install one for your hardware:",
-                 font=("Courier New", 9), fg=C["text"], bg=C["bg"],
-                 justify="left").pack(anchor="w", pady=(0,12))
-
         status_var = tk.StringVar(value="")
         status_lbl = tk.Label(body, textvariable=status_var,
                                font=("Courier New", 8, "bold"),
@@ -5286,21 +5268,26 @@ class TTSVoicesApp:
             win.update()
             def _do():
                 try:
-                    r = _sp.run([_sys.executable, "-m", "pip", "install", pkg],
+                    r = _sp.run([_sys.executable, "-m", "pip", "install", pkg,
+                                 "--break-system-packages"],
                                 capture_output=True, text=True, timeout=180)
+                    def _set_status(msg, fg):
+                        try:
+                            if win.winfo_exists():
+                                status_var.set(msg)
+                                status_lbl.configure(fg=fg)
+                        except tk.TclError:
+                            pass
                     if r.returncode == 0:
-                        self.root.after(0, lambda: status_var.set(
-                            f"✓ {label} installed! Restart the app to use it."))
-                        self.root.after(0, lambda: status_lbl.configure(fg=C["success"]))
+                        self.root.after(0, lambda: _set_status(
+                            f"✓ {label} installed! Restart the app to use it.", C["success"]))
                         bug_tracker.info(f"GPU package installed: {pkg}")
                     else:
                         err = r.stderr.strip()[-120:]
-                        self.root.after(0, lambda: status_var.set(f"✗ Failed: {err}"))
-                        self.root.after(0, lambda: status_lbl.configure(fg=C["error"]))
+                        self.root.after(0, lambda: _set_status(f"✗ Failed: {err}", C["error"]))
                         bug_tracker.error(f"GPU install failed {pkg}: {r.stderr[:300]}")
                 except Exception as e:
-                    self.root.after(0, lambda: status_var.set(f"✗ Error: {e}"))
-                    self.root.after(0, lambda: status_lbl.configure(fg=C["error"]))
+                    self.root.after(0, lambda: _set_status(f"✗ Error: {e}", C["error"]))
             threading.Thread(target=_do, daemon=True).start()
 
         GPU_OPTIONS = [
@@ -5309,21 +5296,35 @@ class TTSVoicesApp:
             ("AMD GPU",       "onnxruntime-rocm",      "ROCm"),
         ]
         for hw_label, pkg, _ in GPU_OPTIONS:
+            # Check if this package is already installed
+            pkg_installed = False
+            try:
+                import importlib.util
+                pkg_installed = importlib.util.find_spec(pkg) is not None
+            except Exception:
+                pass
+
             row = tk.Frame(body, bg=C["surface"], padx=10, pady=6,
-                           highlightthickness=1, highlightbackground=C["border"])
+                           highlightthickness=1,
+                           highlightbackground=C["success"] if pkg_installed else C["border"])
             row.pack(fill="x", pady=3)
             tk.Label(row, text=hw_label, font=("Courier New", 9, "bold"),
                      fg=C["text"], bg=C["surface"], width=14, anchor="w").pack(side="left")
-            tk.Label(row, text=f"pip install {pkg}",
-                     font=("Courier New", 8), fg=C["muted"],
-                     bg=C["surface"]).pack(side="left", padx=(0,8))
-            tk.Button(row, text="Install",
-                      font=("Courier New", 8, "bold"),
-                      bg=C["accent"], fg="white", relief="flat",
-                      padx=8, pady=3, cursor="hand2",
-                      activebackground=C["speak_hover"],
-                      command=lambda p=pkg, l=hw_label: _install(p, l)
-                      ).pack(side="right")
+            if pkg_installed:
+                tk.Label(row, text="✓ Installed",
+                         font=("Courier New", 8, "bold"),
+                         fg=C["success"], bg=C["surface"]).pack(side="right")
+            else:
+                tk.Label(row, text=f"pip install {pkg}",
+                         font=("Courier New", 8), fg=C["muted"],
+                         bg=C["surface"]).pack(side="left", padx=(0,8))
+                tk.Button(row, text="Install",
+                          font=("Courier New", 8, "bold"),
+                          bg=C["accent"], fg="white", relief="flat",
+                          padx=8, pady=3, cursor="hand2",
+                          activebackground=C["speak_hover"],
+                          command=lambda p=pkg, l=hw_label: _install(p, l)
+                          ).pack(side="right")
 
         tk.Label(body, text=f"Current providers: {', '.join(avail)}",
                  font=("Courier New", 7), fg=C["muted"],
@@ -5331,11 +5332,7 @@ class TTSVoicesApp:
 
         foot = tk.Frame(win, bg=C["surface"], pady=8)
         foot.pack(fill="x", side="bottom")
-        tk.Button(foot, text="  Close  ",
-                  font=("Courier New", 9, "bold"),
-                  bg=C["surface2"], fg=C["text2"], relief="flat",
-                  padx=12, pady=5, command=win.destroy,
-                  activebackground=C["border"]).pack(side="right", padx=16)
+        win.wait_visibility()
         win.grab_set()
 
     def _show_gpu_dialog(self):
@@ -5424,7 +5421,7 @@ class TTSVoicesApp:
             win.update()
             try:
                 result = subprocess.run(
-                    [sys.executable, "-m", "pip", "install", "onnxruntime-openvino"],
+                    [sys.executable, "-m", "pip", "install", "onnxruntime-openvino", "--break-system-packages"],
                     capture_output=True, text=True, timeout=120
                 )
                 if result.returncode == 0:
@@ -5782,182 +5779,6 @@ class TTSVoicesApp:
         d.geometry(f"{w}x{h}+{max(0,(sw-w)//2)}+{max(0,(sh-h)//2)}")
         d.grab_set()
 
-    def _pick_plugin_file(self, parent_win) -> str:
-        """
-        Dark-themed file picker for .py plugin files.
-        Returns the selected file path, or "" if cancelled.
-        Searches HOME, Downloads, and common dev folders.
-        """
-        import os
-
-        picker = tk.Toplevel(parent_win)
-        picker.title("Select Plugin (.py)")
-        picker.configure(bg=C["bg"])
-        picker.transient(parent_win)
-        picker.resizable(True, True)
-        picker.geometry("620x440")
-        picker.grab_set()
-
-        result = [""]
-
-        # ── Header ────────────────────────────────────────────────────────────
-        hdr = tk.Frame(picker, bg=C["surface"]); hdr.pack(fill="x")
-        tk.Label(hdr, text="⊕  Select Plugin (.py)",
-                 font=("Courier New", 10, "bold"),
-                 fg=C["accent2"], bg=C["surface"],
-                 padx=16, pady=10).pack(side="left")
-        tk.Frame(picker, bg=C["border"], height=1).pack(fill="x")
-
-        # ── Path bar ──────────────────────────────────────────────────────────
-        path_bar = tk.Frame(picker, bg=C["surface2"], padx=8, pady=4)
-        path_bar.pack(fill="x")
-        path_var = tk.StringVar(value=str(Path.home()))
-        path_entry = tk.Entry(path_bar, textvariable=path_var,
-                              font=("Courier New", 8),
-                              bg=C["surface"], fg=C["text"],
-                              insertbackground=C["accent2"],
-                              relief="flat", bd=4)
-        path_entry.pack(side="left", fill="x", expand=True)
-
-        # ── File list ─────────────────────────────────────────────────────────
-        list_outer = tk.Frame(picker, bg=C["bg"])
-        list_outer.pack(fill="both", expand=True, padx=0, pady=0)
-        sb = tk.Scrollbar(list_outer, orient="vertical",
-                          bg=C["surface2"], troughcolor=C["bg"],
-                          width=10, relief="flat")
-        sb.pack(side="right", fill="y")
-        listbox = tk.Listbox(list_outer,
-                             font=("Courier New", 9),
-                             bg=C["surface"], fg=C["text"],
-                             selectbackground=C["accent"],
-                             selectforeground="white",
-                             activestyle="none",
-                             relief="flat", bd=0,
-                             yscrollcommand=sb.set)
-        listbox.pack(side="left", fill="both", expand=True)
-        sb.config(command=listbox.yview)
-
-        _entries = []   # list of (display_name, full_path, is_dir)
-
-        def _populate(directory: str):
-            listbox.delete(0, "end")
-            _entries.clear()
-            try:
-                items = sorted(os.scandir(directory), key=lambda e: (not e.is_dir(), e.name.lower()))
-            except PermissionError:
-                return
-            # Parent directory entry
-            parent = str(Path(directory).parent)
-            if parent != directory:
-                _entries.append(("..", parent, True))
-                listbox.insert("end", "  📁  ..")
-                listbox.itemconfig(0, fg=C["text2"])
-            for entry in items:
-                if entry.name.startswith("."):
-                    continue
-                if entry.is_dir():
-                    _entries.append((entry.name, entry.path, True))
-                    listbox.insert("end", f"  📁  {entry.name}")
-                    listbox.itemconfig("end", fg=C["text2"])
-                elif entry.name.endswith(".py"):
-                    _entries.append((entry.name, entry.path, False))
-                    listbox.insert("end", f"  🔌  {entry.name}")
-            path_var.set(directory)
-
-        _populate(str(Path.home()))
-
-        def _on_double_click(_e=None):
-            sel = listbox.curselection()
-            if not sel: return
-            name, fpath, is_dir = _entries[sel[0]]
-            if is_dir:
-                _populate(fpath)
-            else:
-                result[0] = fpath
-                picker.destroy()
-
-        def _on_path_enter(_e=None):
-            p = path_var.get().strip()
-            if Path(p).is_dir():
-                _populate(p)
-
-        listbox.bind("<Double-Button-1>", _on_double_click)
-        listbox.bind("<Return>",          _on_double_click)
-        path_entry.bind("<Return>",       _on_path_enter)
-
-        # ── Quick-access sidebar ──────────────────────────────────────────────
-        shortcuts = [
-            ("🏠 Home",      str(Path.home())),
-            ("⬇ Downloads", str(Path.home() / "Downloads")),
-            ("📄 Documents", str(Path.home() / "Documents")),
-        ]
-        # Also add plugins dir
-        shortcuts.append(("⊕ Plugins", str(PLUGINS_DIR)))
-
-        side = tk.Frame(picker, bg=C["surface2"], width=130)
-        side.pack(side="left", fill="y", before=list_outer)
-        tk.Label(side, text="Quick Access",
-                 font=("Courier New", 7, "bold"),
-                 fg=C["muted"], bg=C["surface2"],
-                 pady=6).pack(fill="x", padx=8)
-        for label, spath in shortcuts:
-            tk.Button(side, text=label,
-                      font=("Courier New", 8),
-                      bg=C["surface2"], fg=C["text2"],
-                      relief="flat", anchor="w", padx=8, pady=3,
-                      cursor="hand2", activebackground=C["border"],
-                      command=lambda p=spath: _populate(p)).pack(fill="x")
-
-        # ── Footer ────────────────────────────────────────────────────────────
-        tk.Frame(picker, bg=C["border"], height=1).pack(fill="x")
-        foot = tk.Frame(picker, bg=C["surface2"], pady=8)
-        foot.pack(fill="x")
-        selected_var = tk.StringVar(value="No file selected")
-        tk.Label(foot, textvariable=selected_var,
-                 font=("Courier New", 8), fg=C["muted"],
-                 bg=C["surface2"]).pack(side="left", padx=12)
-
-        def _on_select(_e=None):
-            sel = listbox.curselection()
-            if not sel: return
-            name, fpath, is_dir = _entries[sel[0]]
-            if not is_dir:
-                selected_var.set(name)
-
-        listbox.bind("<<ListboxSelect>>", _on_select)
-
-        def _confirm():
-            sel = listbox.curselection()
-            if sel:
-                name, fpath, is_dir = _entries[sel[0]]
-                if not is_dir:
-                    result[0] = fpath
-                    picker.destroy()
-                    return
-            # Try path entry directly
-            p = path_var.get().strip()
-            if p.endswith(".py") and Path(p).is_file():
-                result[0] = p
-                picker.destroy()
-
-        tk.Button(foot, text="  Cancel  ",
-                  font=("Courier New", 9),
-                  bg=C["surface"], fg=C["muted"],
-                  relief="flat", padx=10, pady=4, cursor="hand2",
-                  command=picker.destroy).pack(side="right", padx=(4,12))
-        tk.Button(foot, text="  Open  ",
-                  font=("Courier New", 9, "bold"),
-                  bg=C["accent"], fg="white",
-                  relief="flat", padx=10, pady=4, cursor="hand2",
-                  activebackground=C["speak_hover"],
-                  command=_confirm).pack(side="right", padx=4)
-
-        picker.update_idletasks()
-        sw = self.root.winfo_screenwidth(); sh = self.root.winfo_screenheight()
-        picker.geometry(f"620x440+{max(0,(sw-620)//2)}+{max(0,(sh-440)//2)}")
-        parent_win.wait_window(picker)
-        return result[0]
-
     def _open_settings(self):
         win = tk.Toplevel(self.root); win.title("Settings")
         win.geometry("500x560"); win.configure(bg=C["bg"]); win.transient(self.root)
@@ -6006,19 +5827,12 @@ class TTSVoicesApp:
         # Now all content packs into win_inner instead of win
         win = win_inner   # rebind win so all existing pack() calls go to the scrollable frame
 
-        frm=tk.Frame(win,bg=C["surface"],padx=16,pady=12)
-        frm.pack(fill="x",padx=16,pady=4)
-        tk.Label(frm,text=f"Config:  {CONFIG_DIR}",
-                 font=("Courier New",9),fg=C["text2"],bg=C["surface"]).pack(anchor="w")
-        tk.Label(frm,text=f"Models:  {voices.MODELS_DIR if voices else _MODELS_DIR}",
-                 font=("Courier New",9),fg=C["text2"],bg=C["surface"]).pack(anchor="w",pady=(4,0))
-
         frm2=tk.Frame(win,bg=C["surface"],padx=16,pady=12)
         frm2.pack(fill="x",padx=16,pady=4)
         tk.Label(frm2,text="Chunk size (words):",
                  font=("Courier New",9),fg=C["text2"],bg=C["surface"]).pack(anchor="w")
         cv=tk.IntVar(value=self.cfg.get("chunk_words",200))
-        tk.Scale(frm2,variable=cv,from_=50,to=500,orient="horizontal",
+        tk.Scale(frm2,variable=cv,from_=50,to=500,orient="horizontal",sliderlength=30,
                  bg=C["surface"],fg=C["text"],troughcolor=C["surface2"],
                  highlightthickness=0,activebackground=C["accent"]).pack(fill="x")
 
@@ -6028,14 +5842,11 @@ class TTSVoicesApp:
                  text=f"Highlight sync offset:  {self.cfg.get('highlight_offset',150)} ms",
                  font=("Courier New",9),fg=C["text2"],bg=C["surface"])
         offset_lbl.pack(anchor="w")
-        tk.Label(frm3,
-                 text="Higher = highlights wait longer (speech ahead of highlight)  |  Lower = highlights fire sooner (highlight ahead of speech)",
-                 font=("Courier New",7),fg=C["muted"],bg=C["surface"],justify="left").pack(anchor="w")
         ov=tk.IntVar(value=self.cfg.get("highlight_offset",150))
         def _on_offset(*_):
             offset_lbl.configure(text=f"Highlight sync offset:  {ov.get()} ms")
         ov.trace_add("write", _on_offset)
-        tk.Scale(frm3,variable=ov,from_=-200,to=500,orient="horizontal",
+        tk.Scale(frm3,variable=ov,from_=-200,to=500,orient="horizontal",sliderlength=30,
                  bg=C["surface"],fg=C["text"],troughcolor=C["surface2"],
                  highlightthickness=0,activebackground=C["accent"]).pack(fill="x")
 
@@ -6047,21 +5858,14 @@ class TTSVoicesApp:
                  fg=C["text2"], bg=C["surface"]).pack(anchor="w", pady=(0,6))
 
         cloud_row = tk.Frame(frm_cloud, bg=C["surface"]); cloud_row.pack(fill="x", pady=(0,4))
-        tk.Label(cloud_row, text="Edge TTS (Microsoft cloud) — opt-in only",
+        tk.Label(cloud_row, text="Edge TTS (Microsoft cloud)",
                  font=("Courier New", 9), fg=C["text2"],
-                 bg=C["surface"], wraplength=320, justify="left").pack(side="left")
+                 bg=C["surface"]).pack(side="left")
         _cloud_state = [self.cfg.get("cloud_tts_enabled", False)]
         def _on_cloud_toggle(s):
             _cloud_state[0] = s
         _cloud_pill = PillToggle(cloud_row, state=_cloud_state[0], callback=_on_cloud_toggle)
         _cloud_pill.pack(side="right")
-
-        tk.Label(frm_cloud,
-                 text=("✓ OFF by default — TTS runs fully on this machine, no text leaves your PC.  "
-                       "Turn ON only if you need higher-quality voices and accept that your text "
-                       "is sent to api.edge.microsoft.com for synthesis."),
-                 font=("Courier New", 7), fg=C["muted"],
-                 bg=C["surface"], wraplength=420, justify="left").pack(anchor="w", pady=(2,0))
 
         # ── Window: maximise on launch ─────────────────────────────────────────
         frm_max = tk.Frame(win, bg=C["surface"], padx=16, pady=10)
@@ -6108,9 +5912,10 @@ class TTSVoicesApp:
         dep_sep = tk.Frame(frm4, bg=C["border2"], height=1)
         dep_sep.pack(fill="x", pady=(6,6))
         dep_hdr = tk.Frame(frm4, bg=C["surface"]); dep_hdr.pack(fill="x")
-        tk.Label(dep_hdr, text="Check for package updates (venv pip):",
+        tk.Label(dep_hdr, text="Check for package updates:",
                  font=("Courier New", 9), fg=C["text2"],
                  bg=C["surface"]).pack(side="left")
+        dep_btns = tk.Frame(dep_hdr, bg=C["surface"]); dep_btns.pack(side="right")
         dep_status_var = tk.StringVar(value="")
         dep_status_lbl = tk.Label(frm4, textvariable=dep_status_var,
                                    font=("Courier New", 8), fg=C["muted"],
@@ -6148,11 +5953,11 @@ class TTSVoicesApp:
             _thr.Thread(target=_worker, daemon=True).start()
 
         _install_btn_var = tk.StringVar(value=" Install All ")
-        _install_btn = tk.Button(dep_hdr, textvariable=_install_btn_var,
-                  font=("Courier New", 8, "bold"), bg=C["success"], fg="white",
-                  relief="flat", padx=8, pady=3, cursor="hand2",
+        _install_btn = tk.Button(dep_btns, textvariable=_install_btn_var,
+                  font=("Courier New", 9, "bold"), bg=C["success"], fg="white",
+                  relief="flat", padx=12, pady=4, cursor="hand2",
                   activebackground="#1a6a30",
-                  state="disabled")
+                  disabledforeground="#888888", state="disabled")
         _install_btn.pack(side="right", padx=(4,0))
 
         def _install_updates():
@@ -6165,7 +5970,7 @@ class TTSVoicesApp:
             def _worker2():
                 try:
                     r2 = _sp2.run(
-                        [_sys.executable, "-m", "pip", "install", "--upgrade"] + pkgs,
+                        [_sys.executable, "-m", "pip", "install", "--upgrade", "--break-system-packages"] + pkgs,
                         capture_output=True, text=True, timeout=120
                     )
                     def _done():
@@ -6191,44 +5996,12 @@ class TTSVoicesApp:
         _install_btn.configure(command=_install_updates)
         _outdated_list = [[]]  # mutable container so _install_updates can read it
 
-        tk.Button(dep_hdr, text=" Check now ",
+        tk.Button(dep_btns, text=" Check now ",
                   font=("Courier New", 8), bg=C["surface2"], fg=C["accent2"],
                   relief="flat", padx=8, pady=3, cursor="hand2",
                   highlightthickness=1, highlightbackground=C["border2"],
                   activebackground=C["border"],
                   command=_run_dep_check).pack(side="right")
-
-
-        # ── Plugins Section (read-only — manage via ⊕ Plugins in the nav bar) ─
-        tk.Frame(win, bg=C["border"], height=1).pack(fill="x", padx=16, pady=(4,2))
-        plg_outer = tk.Frame(win, bg=C["surface"], padx=16, pady=10)
-        plg_outer.pack(fill="x", padx=16, pady=(0,6))
-
-        plg_hdr = tk.Frame(plg_outer, bg=C["surface"]); plg_hdr.pack(fill="x")
-        tk.Label(plg_hdr, text="Plugins",
-                 font=("Courier New", 9, "bold"),
-                 fg=C["text2"], bg=C["surface"]).pack(side="left")
-        tk.Label(plg_hdr, text="Manage via  ⊕ Plugins  in the nav bar",
-                 font=("Courier New", 7), fg=C["muted"],
-                 bg=C["surface"]).pack(side="left", padx=(10,0))
-
-        # Status summary only — no Add/Remove here
-        n = len(self._loaded_plugins)
-        errors = sum(1 for p in self._loaded_plugins if "error" in p)
-        if n == 0:
-            summary = "No plugins loaded.  Drop .py files into  ~/.ttsvoices/plugins/"
-            summary_col = C["muted"]
-        elif errors:
-            summary = f"{n} plugin(s) loaded  ·  {errors} error(s) — see ⊕ Plugins"
-            summary_col = C["warning"]
-        else:
-            summary = f"{n} plugin(s) active  ·  ✓ all loaded successfully"
-            summary_col = C["success"]
-
-        tk.Label(plg_outer, text=summary,
-                 font=("Courier New", 8), fg=summary_col,
-                 bg=C["surface"], wraplength=400, justify="left",
-                 pady=4).pack(anchor="w")
 
 
         def _save():
@@ -6472,181 +6245,6 @@ class TTSVoicesApp:
         _step()
 
 
-    def _open_plugins_manager(self):
-        """Standalone Plugins Manager window — also accessible from the nav bar."""
-        win = tk.Toplevel(self.root)
-        win.title("Plugin Manager")
-        win.geometry("520x480")
-        win.configure(bg=C["bg"])
-        win.transient(self.root)
-        win.resizable(True, True)
-
-        # Header
-        hdr = tk.Frame(win, bg=C["surface"]); hdr.pack(fill="x")
-        tk.Label(hdr, text="⊕  Plugin Manager",
-                 font=("Courier New", 12, "bold"),
-                 fg=C["accent2"], bg=C["surface"],
-                 padx=20, pady=12).pack(side="left")
-        tk.Frame(win, bg=C["border"], height=1).pack(fill="x")
-
-        # Info bar
-        info = tk.Frame(win, bg=C["bg"], padx=16, pady=6); info.pack(fill="x")
-        tk.Label(info, text="Plugins live in:", font=("Courier New", 8),
-                 fg=C["muted"], bg=C["bg"]).pack(side="left")
-        dir_lbl = tk.Label(info, text=str(PLUGINS_DIR),
-                            font=("Courier New", 8, "bold"),
-                            fg=C["accent2"], bg=C["bg"], cursor="hand2")
-        dir_lbl.pack(side="left", padx=(4,0))
-        def _open_dir():
-            import subprocess as _sp
-            try: _sp.Popen(["xdg-open", str(PLUGINS_DIR)])
-            except Exception: pass
-        dir_lbl.bind("<Button-1>", lambda _: _open_dir())
-
-        # + Add Plugin button
-        def _add_plugin():
-            import shutil as _sh
-            fp = self._pick_plugin_file(win)
-            if not fp: return
-            PLUGINS_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
-            try: import os as _os; _os.chmod(PLUGINS_DIR, 0o700)
-            except Exception: pass
-            dest = PLUGINS_DIR / Path(fp).name
-            try:
-                _sh.copy2(fp, dest)
-                self._load_plugins()
-                _refresh()
-            except Exception as e:
-                self._dark_error(win, "Plugin Manager", f"Could not install:\n{e}")
-
-        tk.Button(info, text=" + Add Plugin ",
-                  font=("Courier New", 9, "bold"),
-                  bg=C["accent"], fg="white",
-                  relief="flat", padx=10, pady=4, cursor="hand2",
-                  activebackground=C["speak_hover"],
-                  command=_add_plugin).pack(side="right")
-
-        tk.Frame(win, bg=C["border"], height=1).pack(fill="x")
-
-        # Plugin list (scrollable)
-        list_outer = tk.Frame(win, bg=C["bg"]); list_outer.pack(fill="both", expand=True, padx=16, pady=8)
-        sb = tk.Scrollbar(list_outer, orient="vertical", bg=C["surface2"],
-                          troughcolor=C["bg"], width=10, relief="flat")
-        sb.pack(side="right", fill="y")
-        canvas = tk.Canvas(list_outer, bg=C["bg"], highlightthickness=0,
-                           yscrollcommand=sb.set)
-        canvas.pack(side="left", fill="both", expand=True)
-        sb.config(command=canvas.yview)
-        list_frame = tk.Frame(canvas, bg=C["bg"])
-        _cw_id = canvas.create_window((0, 0), window=list_frame, anchor="nw")
-        list_frame.bind("<Configure>", lambda _: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(_cw_id, width=e.width))
-        for seq in ("<Button-4>","<Button-5>"):
-            canvas.bind(seq, lambda e: canvas.yview_scroll(-1 if e.num==4 else 1, "units"))
-
-        def _refresh():
-            for w in list_frame.winfo_children():
-                w.destroy()
-            plugins = self._loaded_plugins
-            if not plugins:
-                empty = tk.Frame(list_frame, bg=C["bg"]); empty.pack(fill="x", pady=20)
-                tk.Label(empty, text="No plugins installed.",
-                         font=("Courier New", 10, "bold"),
-                         fg=C["muted"], bg=C["bg"]).pack()
-                tk.Label(empty,
-                         text='Click  + Add Plugin  to install a .py file.\nOr drop a .py into the plugins folder and reopen this window.',
-                         font=("Courier New", 8), fg=C["muted"], bg=C["bg"],
-                         justify="center").pack(pady=4)
-                return
-
-            for p in plugins:
-                has_error = "error" in p
-                card = tk.Frame(list_frame, bg=C["surface"],
-                                highlightthickness=1,
-                                highlightbackground=C["border2"])
-                card.pack(fill="x", pady=3)
-
-                # Left status strip
-                strip_col = C["error"] if has_error else C["success"]
-                tk.Frame(card, bg=strip_col, width=4).pack(side="left", fill="y")
-
-                body = tk.Frame(card, bg=C["surface"], padx=10, pady=8)
-                body.pack(side="left", fill="both", expand=True)
-
-                name_row = tk.Frame(body, bg=C["surface"]); name_row.pack(fill="x")
-                tk.Label(name_row,
-                         text=f"⊕ {p['name']}",
-                         font=("Courier New", 10, "bold"),
-                         fg=C["accent2"] if not has_error else C["error"],
-                         bg=C["surface"]).pack(side="left")
-
-                status = "✓ Active" if not has_error else f"✗ Error"
-                tk.Label(name_row,
-                         text=status,
-                         font=("Courier New", 8),
-                         fg=C["success"] if not has_error else C["error"],
-                         bg=C["surface"]).pack(side="left", padx=(8,0))
-
-                path_lbl = tk.Label(body, text=p["path"],
-                                    font=("Courier New", 7), fg=C["muted"],
-                                    bg=C["surface"], anchor="w")
-                path_lbl.pack(fill="x", pady=(2,0))
-
-                if has_error:
-                    tk.Label(body, text=p["error"],
-                             font=("Courier New", 8), fg=C["error"],
-                             bg=C["surface"], wraplength=380, anchor="w").pack(fill="x", pady=(2,0))
-                else:
-                    reg_text = "register(app) ✓" if p.get("has_register") else "loaded — no register() found"
-                    tk.Label(body, text=reg_text,
-                             font=("Courier New", 8), fg=C["muted"],
-                             bg=C["surface"], anchor="w").pack(fill="x")
-
-                # Remove button
-                def _make_remove(plugin_path, card_widget):
-                    def _remove():
-                        if not self._dark_confirm(win, "Remove Plugin", f"Remove  {Path(plugin_path).name}?"):
-                            return
-                        try:
-                            Path(plugin_path).unlink(missing_ok=True)
-                            self._load_plugins()
-                            _refresh()
-                        except Exception as e:
-                            self._dark_error(win, "Plugin Manager", f"Could not remove:\n{e}")
-                    return _remove
-
-                btn_frame = tk.Frame(card, bg=C["surface"], padx=8)
-                btn_frame.pack(side="right", fill="y")
-                tk.Button(btn_frame, text="Remove",
-                          font=("Courier New", 8),
-                          bg=C["surface2"], fg=C["error"],
-                          relief="flat", padx=8, pady=4, cursor="hand2",
-                          highlightthickness=1,
-                          highlightbackground=C["border"],
-                          activebackground=C["border"],
-                          command=_make_remove(p["path"], card)).pack(pady=4)
-
-        _refresh()
-
-        # Footer
-        tk.Frame(win, bg=C["border"], height=1).pack(fill="x")
-        foot = tk.Frame(win, bg=C["surface2"], pady=8); foot.pack(fill="x")
-        tk.Label(foot,
-                 text="Each plugin is a .py file with a register(app) function.",
-                 font=("Courier New", 7), fg=C["muted"],
-                 bg=C["surface2"]).pack(side="left", padx=16)
-        tk.Button(foot, text=" Reload All ",
-                  font=("Courier New", 8),
-                  bg=C["surface"], fg=C["accent2"],
-                  relief="flat", padx=8, pady=3, cursor="hand2",
-                  highlightthickness=1, highlightbackground=C["border2"],
-                  command=lambda: [self._load_plugins(), _refresh()]).pack(side="right", padx=12)
-
-        win.update_idletasks()
-        sw = self.root.winfo_screenwidth(); sh = self.root.winfo_screenheight()
-        ww = win.winfo_reqwidth(); wh = win.winfo_reqheight()
-        win.geometry(f"520x{min(600,max(480,wh))}+{max(0,(sw-520)//2)}+{(sh-min(600,max(480,wh)))//2}")
-
     # ── GitHub release endpoints used by the in-app updater ──────────────────
     _RELEASES_URL  = "https://api.github.com/repos/jspgamer0503-coder/TTSVoices/releases/latest"
     _RELEASES_PAGE = "https://github.com/jspgamer0503-coder/TTSVoices/releases"
@@ -6675,7 +6273,8 @@ class TTSVoicesApp:
         win.resizable(True, True)
         win.minsize(480, 360)
         win.transient(self.root)
-        win.attributes("-topmost", True)
+        try: win.attributes("-type", "dialog")
+        except: pass
 
         # ── Header ────────────────────────────────────────────────────────
         hdr = tk.Frame(win, bg=C["surface"]); hdr.pack(fill="x")
@@ -6797,7 +6396,7 @@ class TTSVoicesApp:
                 _set_status("You are running the latest version.", C["success"])
 
         def _do_changelog():
-            _show_changelog(parent=win, set_status=_set_status)
+            self._show_changelog(parent=win, set_status=_set_status)
 
         def _do_reinstall():
             meta = self._last_release_meta
@@ -6924,7 +6523,8 @@ class TTSVoicesApp:
         win.configure(bg=C["bg"])
         win.geometry("720x540")
         win.transient(parent)
-        win.attributes("-topmost", True)
+        try: win.attributes("-type", "dialog")
+        except: pass
 
         hdr = tk.Frame(win, bg=C["surface"]); hdr.pack(fill="x")
         tk.Label(hdr, text="  Changelog",
@@ -7177,93 +6777,6 @@ class TTSVoicesApp:
 
 
     # ══════════════════════════════════════════════════════════════════════════
-    #  PLUGIN SYSTEM
-    # ══════════════════════════════════════════════════════════════════════════
-    _loaded_plugins: list = []   # list of {"name": str, "module": module, "path": str}
-
-    def _load_plugins(self):
-        """
-        Scan PLUGINS_DIR (~/.ttsvoices/plugins/) for .py files.
-        For each, import it and call register(app) if it exists.
-        Errors are logged but never crash the app.
-        """
-        PLUGINS_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
-        try: import os as _os; _os.chmod(PLUGINS_DIR, 0o700)
-        except Exception: pass
-        self._loaded_plugins = []
-        import importlib.util as _ilu
-        for py_file in sorted(PLUGINS_DIR.glob("*.py")):
-            name = py_file.stem
-            try:
-                spec = _ilu.spec_from_file_location(f"ttsvoices_plugin_{name}", py_file)
-                mod  = _ilu.module_from_spec(spec)
-                spec.loader.exec_module(mod)
-                if hasattr(mod, "register"):
-                    mod.register(self)
-                self._loaded_plugins.append({
-                    "name":   name,
-                    "module": mod,
-                    "path":   str(py_file),
-                    "has_register": hasattr(mod, "register"),
-                })
-                if bug_tracker:
-                    bug_tracker.info(f"Plugin loaded: {name}")
-            except Exception as e:
-                if bug_tracker:
-                    bug_tracker.error(f"Plugin failed to load: {name}: {e}", exc_info=True)
-                self._loaded_plugins.append({
-                    "name":   name,
-                    "module": None,
-                    "path":   str(py_file),
-                    "error":  str(e),
-                })
-
-    # ── Plugin API (callable from plugin register() functions) ────────────────
-
-    def add_nav_button(self, label: str, command, accent: bool = False):
-        """Plugin API: Add a button to the header nav bar."""
-        try:
-            nav = self._nav_frame
-            btn = self._make_nav_btn(nav, label, command)
-            if accent:
-                btn.set_colors(C["accent"], C["accent_dim"])
-                btn._is_accent = True
-        except Exception as e:
-            if bug_tracker:
-                bug_tracker.warning(f"add_nav_button failed: {e}")
-
-    def on_speak_start(self, callback):
-        """Plugin API: Register a callback fired when speech starts. callback()"""
-        if not hasattr(self, "_plugin_speak_start_cbs"):
-            self._plugin_speak_start_cbs = []
-        self._plugin_speak_start_cbs.append(callback)
-
-    def on_speak_stop(self, callback):
-        """Plugin API: Register a callback fired when speech stops. callback()"""
-        if not hasattr(self, "_plugin_speak_stop_cbs"):
-            self._plugin_speak_stop_cbs = []
-        self._plugin_speak_stop_cbs.append(callback)
-
-    def get_current_text(self) -> str:
-        """Plugin API: Return the full text currently in the textarea."""
-        try:
-            return self._textarea.get("1.0", "end-1c")
-        except Exception:
-            return ""
-
-    def set_status(self, text: str, color: str = ""):
-        """Plugin API: Set the status pill text. color is an optional hex string."""
-        self._set_status(text, color or C["success"])
-
-    def _fire_plugin_cbs(self, attr: str):
-        """Internal: fire all registered plugin callbacks for a given event."""
-        for cb in getattr(self, attr, []):
-            try:
-                cb()
-            except Exception as e:
-                if bug_tracker:
-                    bug_tracker.warning(f"Plugin callback error: {e}")
-
     def _on_cfg_change(self, *_):
         """Speed or pitch changed — save config and re-synthesize from current chunk if speaking.
 
@@ -7576,12 +7089,19 @@ class TTSVoicesApp:
         win.configure(bg=C["bg"])
         win.resizable(False, False)
         win.transient(self.root)
-        win.attributes("-topmost", True)
+        try: win.attributes("-type", "dialog")
+        except: pass
 
         # Header with logo
         hdr = tk.Frame(win, bg=C["surface"], pady=14); hdr.pack(fill="x")
-        cnv = self._make_logo_canvas(hdr, size=90)
-        cnv.pack(pady=(0, 6))
+        # Use app icon image instead of programmatic canvas
+        icon_path = Path(_APP_DIR) / "ttsvoices_icon_128.png"
+        if icon_path.is_file():
+            self._about_logo_img = tk.PhotoImage(file=str(icon_path))
+            tk.Label(hdr, image=self._about_logo_img, bg=C["surface"]).pack(pady=(0, 6))
+        else:
+            cnv = self._make_logo_canvas(hdr, size=90)
+            cnv.pack(pady=(0, 6))
 
         tk.Label(hdr, text="TTS VOICES",
                  font=("Segoe UI", 16, "bold"),

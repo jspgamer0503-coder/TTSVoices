@@ -76,16 +76,7 @@ KOKORO_MODELS = [
 # first download manually. To enable strict verification, fill in
 # the SHA after a clean download:
 #   sha256sum ~/.ttsvoices/models/kokoro-v1.0.fp16.onnx
-{
-    "name":     "Kokoro FP16 Half-Precision (v1.0) — optional",
-    "file":     "kokoro-v1.0.fp16.onnx",
-    "url":      "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.fp16.onnx",
-    "size":     "169 MB",
-    "desc":     "FP16 half-precision — smaller than FP32, similar quality. "
-                "Use INSTEAD of the 310 MB model above for a middle-ground trade-off.",
-    "required": False,
-    "sha256":   "",  # TO_VERIFY: sha256sum ~/.ttsvoices/models/kokoro-v1.0.fp16.onnx
-},
+# FP16 model removed — optional and not needed
 ]
 
 
@@ -147,6 +138,7 @@ class VoiceLibraryWindow:
         self._status_labels  = {}
         self._detail_labels  = {}   # ℹ popup detail text per model file key
         self._info_logs      = {}   # raw log lines per model file key (list of str)
+        self._download_btns  = {}   # Download button widgets per model file key
 
         for m in KOKORO_MODELS:
             self._model_row(frame, m)
@@ -154,13 +146,16 @@ class VoiceLibraryWindow:
         # Download all button
         btn_frame = tk.Frame(frame, bg=COLORS["bg"])
         btn_frame.pack(pady=20)
-        tk.Button(btn_frame, text="  Download All Required  ",
+        self._download_all_btn = tk.Button(btn_frame,
+                  text="  Download All Required  ",
                   font=("Courier New", 10, "bold"),
                   bg=COLORS["accent"], fg="white", relief="flat",
                   padx=16, pady=8, cursor="hand2",
                   command=self._download_all,
                   activebackground="#1d6aff",
-                  activeforeground="white").pack()
+                  activeforeground="white")
+        self._download_all_btn.pack()
+        self._refresh_download_all_btn()
 
     def _model_row(self, parent, model):
         row = tk.Frame(parent, bg=COLORS["surface"], pady=12, padx=16,
@@ -214,13 +209,15 @@ class VoiceLibraryWindow:
 
         # Download button (only if not installed)
         if not installed:
-            tk.Button(row, text="Download",
+            btn = tk.Button(row, text="Download",
                       font=("Courier New", 9),
                       bg=COLORS["accent"], fg="white", relief="flat",
                       padx=10, pady=4, cursor="hand2",
                       command=lambda m=model: self._download_one(m),
                       activebackground="#1d6aff",
-                      activeforeground="white").pack(side="right", padx=8, anchor="center")
+                      activeforeground="white")
+            btn.pack(side="right", padx=8, anchor="center")
+            self._download_btns[model["file"]] = btn
 
     def _show_info_popup(self, model_key):
         """Open a small Toplevel window showing the raw download event log for
@@ -263,6 +260,30 @@ class VoiceLibraryWindow:
                                "Click Download to start, then re-open this panel.")
         txt.config(state="disabled")
         txt.see("end")
+
+    def _refresh_download_all_btn(self):
+        """Update the Download All button text/state based on install status."""
+        all_installed = all(
+            (MODELS_DIR / m["file"]).exists()
+            for m in KOKORO_MODELS if m.get("required")
+        )
+        try:
+            if all_installed:
+                self._download_all_btn.config(
+                    text="  All packages installed  ",
+                    state="disabled",
+                    bg=COLORS["surface"],
+                    fg=COLORS["success"],
+                )
+            else:
+                self._download_all_btn.config(
+                    text="  Download All Required  ",
+                    state="normal",
+                    bg=COLORS["accent"],
+                    fg="white",
+                )
+        except Exception:
+            pass
 
     def _download_one(self, model):
         threading.Thread(target=self._do_download, args=(model,), daemon=True).start()
@@ -437,6 +458,11 @@ class VoiceLibraryWindow:
 
             set_status("  ✓ Installed", COLORS["success"])
             set_detail("")
+            # Destroy per-model Download button so user cannot re-download
+            btn = self._download_btns.pop(key, None)
+            if btn:
+                self.win.after(0, btn.destroy)
+            self.win.after(0, self._refresh_download_all_btn)
             # Invalidate Kokoro singleton so new model is picked up on next Speak.
             # _kokoro_singleton is a dict used as a 1-slot cache in voices.py;
             # clearing it forces re-instantiation which loads the new .onnx file.
@@ -560,7 +586,7 @@ class VoiceLibraryWindow:
                 "quality": "★★★★☆",
                 "size":    "326 MB",
                 "license": "Apache 2.0",
-                "desc":    "82M parameter neural TTS. Fastest offline engine. Runs on CPU or Intel GPU (OpenVINO). No internet needed.",
+                "desc":    "82M neural TTS. Fastest offline engine.",
                 "pro":     "Fast · Offline · CPU-friendly · 11 voices",
                 "con":     "Not quite ElevenLabs quality at slow speeds",
                 "pip":     None,
@@ -574,7 +600,7 @@ class VoiceLibraryWindow:
                 "quality": "★★★★★",
                 "size":    "0 MB",
                 "license": "Microsoft ToS",
-                "desc":    "Microsoft Azure Neural voices — the same ones used in Edge browser Read Aloud. ~7-9x faster than Kokoro on this hardware, with higher quality. No model download. Text is sent to api.edge.microsoft.com.",
+                "desc":    "Microsoft Azure Neural voices. ~7-9x faster than Kokoro.",
                 "pro":     "Highest quality · Fastest on CPU · 17 voices · No download",
                 "con":     "Requires internet · Text sent to Microsoft servers",
                 "pip":     "edge-tts",
@@ -588,7 +614,7 @@ class VoiceLibraryWindow:
                 "quality": "★★★★★",
                 "size":    "~3.2 GB",
                 "license": "Apache 2.0",
-                "desc":    "Nari Labs dialogue model. Ultra-realistic multi-speaker dialogue synthesis. Best-in-class for audiobooks and storytelling. English only.",
+                "desc":    "Dialogue model. Ultra-realistic multi-speaker synthesis.",
                 "pro":     "Best audiobook quality · Multi-speaker · Apache 2.0",
                 "con":     "Very large (3.2GB) · English only · Slow on CPU",
                 "pip":     "git+https://github.com/nari-labs/dia.git",
@@ -757,7 +783,7 @@ class VoiceLibraryWindow:
                         _cancel_btn_ref[0].destroy()
                         _cancel_btn_ref[0] = None
                     tk.Button(bf,
-                              text="✕ Remove",
+                              text="Remove",
                               font=("Courier New", 8),
                               bg=COLORS["surface"], fg=COLORS["error"],
                               relief="flat", padx=10, pady=3,
@@ -871,7 +897,8 @@ class VoiceLibraryWindow:
                         _ui(lambda: sv.set("Cancelled"))
                         _ui(lambda: sl.configure(fg=COLORS["muted"]))
                     elif proc.returncode == 0:
-                        _ui(lambda: sv.set("✓ Installed! Restart app."))
+                        _install_check_cache.pop(eng.get("installed_check", ""), None)
+                        _ui(lambda: sv.set("✓ Installed"))
                         if self._on_engine_change:
                             _ui(self._on_engine_change)
                         _ui(lambda: sl.configure(fg=COLORS["success"]))
@@ -999,7 +1026,7 @@ class VoiceLibraryWindow:
                                         elif proc.returncode == 0:
                                             _install_check_cache.pop(
                                                 eng.get("installed_check",""), None)
-                                            _ui(lambda: sv.set("✓ Installed! Restart app."))
+                                            _ui(lambda: sv.set("✓ Installed"))
                                             if self._on_engine_change:
                                                 _ui(self._on_engine_change)
                                             _ui(lambda: sl.configure(fg=COLORS["success"]))
@@ -1010,7 +1037,7 @@ class VoiceLibraryWindow:
                                                 try:
                                                     for w in _bf.winfo_children():
                                                         w.destroy()
-                                                    tk.Button(_bf, text="✕ Remove",
+                                                    tk.Button(_bf, text="Remove",
                                                               font=("Courier New", 8),
                                                               bg=COLORS["surface"],
                                                               fg=COLORS["error"],
@@ -1059,7 +1086,7 @@ class VoiceLibraryWindow:
                                 ib.pack(side="left", padx=2)
                                 _ri_ibtn[0] = ib
 
-                                cb = tk.Button(_bf, text="✕ Cancel",
+                                cb = tk.Button(_bf, text="Cancel",
                                                font=("Courier New", 8, "bold"),
                                                bg=COLORS["error"], fg="white",
                                                relief="flat", padx=10, pady=3,
@@ -1112,7 +1139,7 @@ class VoiceLibraryWindow:
 
                 # Cancel button — created but NOT packed until install starts
                 cancel_btn_widget = tk.Button(btn_frame,
-                          text="✕ Cancel",
+                          text="Cancel",
                           font=("Courier New", 8, "bold"),
                           bg=COLORS["error"], fg="white",
                           relief="flat", padx=10, pady=3,
@@ -1121,18 +1148,6 @@ class VoiceLibraryWindow:
                           activeforeground="white",
                           command=_do_cancel)
                 _cancel_btn_ref[0] = cancel_btn_widget
-            else:
-                tk.Button(btn_frame,
-                          text="✕ Remove",
-                          font=("Courier New", 8),
-                          bg=COLORS["surface"], fg=COLORS["error"],
-                          relief="flat", padx=10, pady=3,
-                          cursor="hand2",
-                          highlightthickness=1,
-                          highlightbackground=COLORS["error"],
-                          command=lambda fn=_do_uninstall: threading.Thread(
-                              target=fn, daemon=True).start()
-                          ).pack(side="left", padx=2)
 
         # pip command display
         if eng["pip"]:
@@ -1289,7 +1304,7 @@ class VoiceLibraryWindow:
                             command=_run)
         run_btn.pack(side="left", padx=(0, 6))
 
-        cancel_btn = tk.Button(btn_row, text="✕ Cancel",
+        cancel_btn = tk.Button(btn_row, text="Cancel",
                                font=("Courier New", 9),
                                bg=COLORS["surface"], fg=COLORS["error"],
                                relief="flat", padx=10, pady=4, cursor="hand2",

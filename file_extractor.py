@@ -865,6 +865,78 @@ def extract_csv(path: str) -> str:
         bug_tracker.warning(f"CSV read error: {e}")
     return "\n".join(rows)
 
+# ── Image / OCR ────────────────────────────────────────────────────────────────
+
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tiff", ".tif", ".webp"}
+
+def _ensure_tesseract():
+    """Ensure tesseract binary is available. Returns path to tesseract binary."""
+    import shutil
+
+    # 1. Check system PATH first
+    sys_tess = shutil.which("tesseract")
+    if sys_tess:
+        return sys_tess
+
+    # 2. Check local download
+    local_tess = Path.home() / ".ttsvoices" / "tesseract" / "extracted" / "usr" / "bin" / "tesseract"
+    if local_tess.exists():
+        # Add its lib dir to LD_LIBRARY_PATH
+        lib_dir = local_tess.parent.parent / "lib" / "x86_64-linux-gnu"
+        if lib_dir.exists():
+            os.environ.setdefault("LD_LIBRARY_PATH", "")
+            if str(lib_dir) not in os.environ["LD_LIBRARY_PATH"]:
+                os.environ["LD_LIBRARY_PATH"] = str(lib_dir) + ":" + os.environ["LD_LIBRARY_PATH"]
+        # Set TESSDATA_PREFIX
+        tessdata = local_tess.parent.parent / "share" / "tesseract-ocr" / "5" / "tessdata"
+        if tessdata.exists():
+            os.environ["TESSDATA_PREFIX"] = str(tessdata)
+        os.environ["PATH"] = str(local_tess.parent) + ":" + os.environ.get("PATH", "")
+        return str(local_tess)
+
+    # 3. Try auto-download
+    try:
+        from dep_installer import _download_tesseract
+        ok, path = _download_tesseract()
+        if ok:
+            return path
+    except Exception:
+        pass
+
+    return None
+
+
+def extract_image(path: str) -> str:
+    """Extract text from an image using Tesseract OCR (pytesseract)."""
+    # Check pytesseract is importable
+    try:
+        import pytesseract
+    except ImportError:
+        raise RuntimeError(
+            "OCR is not installed.\n\n"
+            "Install it with:\n"
+            "  pip install pytesseract Pillow --break-system-packages\n\n"
+            "Or open Settings → Check for package updates → Install All."
+        )
+
+    # Ensure tesseract binary is available
+    tess_path = _ensure_tesseract()
+    if not tess_path:
+        raise RuntimeError(
+            "Tesseract OCR engine is not installed.\n\n"
+            "Open Settings → Updates → Install All to auto-install it, or run:\n"
+            "  sudo apt install tesseract-ocr  (Linux)"
+        )
+
+    from PIL import Image
+    bug_tracker.info(f"Running OCR on: {path}")
+    try:
+        img = Image.open(path)
+        text = pytesseract.image_to_string(img)
+        return text
+    except Exception as e:
+        raise RuntimeError(f"OCR failed on image: {e}")
+
 # ── Registry ──────────────────────────────────────────────────────────────────
 EXTRACTORS = {
     ".pdf":  extract_pdf,
@@ -879,9 +951,12 @@ EXTRACTORS = {
     ".md":   extract_txt,
     ".csv":  extract_csv,
 }
+# Add image formats
+for _ext in IMAGE_EXTS:
+    EXTRACTORS[_ext] = extract_image
 
 SUPPORTED_EXTENSIONS = list(EXTRACTORS.keys())
-SUPPORTED_DISPLAY    = "PDF, DOCX, DOC, EPUB, HTML, RTF, ODT, TXT, MD, CSV"
+SUPPORTED_DISPLAY    = "PDF, DOCX, DOC, EPUB, HTML, RTF, ODT, TXT, MD, CSV, PNG, JPG, BMP, GIF, TIFF, WEBP"
 
 def extract_text(path: str) -> str:
     """Extract text from any supported file. Handles passwords and locked files."""
