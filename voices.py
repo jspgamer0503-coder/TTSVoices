@@ -1,8 +1,8 @@
 """
-TTS Voices 2.5.2 - Optimized Voice Synthesis Module
+TTS Voices - Optimized Voice Synthesis Module
 
 Maintained by the opencode AI assistant — see README.md.
-Priority chain: Edge TTS (cloud) -> Kokoro ONNX -> espeak-ng
+Priority chain: Kokoro ONNX (offline) -> espeak-ng (fallback) -> Edge TTS (opt-in cloud)
 
 OPTIMIZATIONS:
 1. Lazy loading of Kokoro model (only load when first used)
@@ -774,6 +774,36 @@ EDGE_TTS_VOICES = {
 ENGINE_KOKORO     = "Kokoro ONNX"
 ENGINE_ESPEAK     = "espeak-ng"
 ENGINE_EDGE_TTS   = "Edge TTS (Cloud)"
+
+
+class TTSEngineManager:
+    """Selects the best available engine based on offline-first priority.
+    Priority: Kokoro (offline) -> espeak-ng (fallback) -> Edge (opt-in cloud).
+    """
+
+    def __init__(self, config: dict):
+        self.config = config
+        self.engine_priority = [ENGINE_KOKORO, ENGINE_ESPEAK, ENGINE_EDGE_TTS]
+
+    def get_active_engine(self) -> str:
+        use_cloud = self.config.get("cloud_tts_enabled", False)
+        for engine_name in self.engine_priority:
+            if engine_name == ENGINE_EDGE_TTS and not use_cloud:
+                continue
+            if self._is_available(engine_name):
+                return engine_name
+        raise RuntimeError("No TTS engines are available.")
+
+    @staticmethod
+    def _is_available(name: str) -> bool:
+        from functools import lru_cache
+        checks = {
+            ENGINE_KOKORO:   lambda: check_kokoro(),
+            ENGINE_ESPEAK:   lambda: check_espeak(),
+            ENGINE_EDGE_TTS:  lambda: check_edge_tts(),
+        }
+        fn = checks.get(name)
+        return fn() if fn else False
 ENGINE_CHATTERBOX = "Chatterbox"
 ENGINE_OMNIVOICE  = "OmniVoice"
 ENGINE_F5TTS      = "F5-TTS"

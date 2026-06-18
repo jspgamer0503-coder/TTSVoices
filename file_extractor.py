@@ -894,12 +894,15 @@ def _ensure_tesseract():
         os.environ["PATH"] = str(local_tess.parent) + ":" + os.environ.get("PATH", "")
         return str(local_tess)
 
-    # 3. Try auto-download
+    # 3. Prompt user for manual install instead of silent download
     try:
-        from dep_installer import _download_tesseract
-        ok, path = _download_tesseract()
-        if ok:
-            return path
+        from dep_installer import check_system_dependency
+        check_system_dependency(
+            "tesseract",
+            "Ubuntu/Debian: sudo apt install tesseract-ocr\n"
+            "Fedora: sudo dnf install tesseract\n"
+            "Arch: sudo pacman -S tesseract"
+        )
     except Exception:
         pass
 
@@ -924,8 +927,9 @@ def extract_image(path: str) -> str:
     if not tess_path:
         raise RuntimeError(
             "Tesseract OCR engine is not installed.\n\n"
-            "Open Settings → Updates → Install All to auto-install it, or run:\n"
-            "  sudo apt install tesseract-ocr  (Linux)"
+            "Install it manually:\n"
+            "  sudo apt install tesseract-ocr tesseract-ocr-eng\n"
+            "Then restart TTS Voices."
         )
 
     from PIL import Image

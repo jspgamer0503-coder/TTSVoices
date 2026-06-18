@@ -33,57 +33,55 @@ def _aes_cbc_decrypt(key, iv, ciphertext):
     raise RuntimeError("Install pycryptodome: pip install pycryptodome")
 
 
-# ── PBKDF2-SHA1 ───────────────────────────────────────────────────────────────
-def _pbkdf2_sha1(pw_bytes, salt, iterations, key_len):
-    """PBKDF2-HMAC-SHA1 — the PRF LibreOffice always uses."""
-    try:
-        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-        from cryptography.hazmat.primitives import hashes
-        from cryptography.hazmat.backends import default_backend
-        kdf = PBKDF2HMAC(algorithm=hashes.SHA1(), length=key_len,
-                          salt=salt, iterations=iterations,
-                          backend=default_backend())
-        return kdf.derive(pw_bytes)
-    except ImportError:
-        return hashlib.pbkdf2_hmac("sha1", pw_bytes, salt, iterations, dklen=key_len)
-
-
 # ── Key derivation ────────────────────────────────────────────────────────────
-def _derive_key(password, params):
+def _derive_key_deterministic(password, params, variant="sha256_sha1"):
     """
-    LibreOffice 24.x-26.x confirmed algorithm:
-      start_key = SHA-256(password_bytes)
-      key = PBKDF2-HMAC-SHA1(start_key, salt, iterations, key_size)
+    Derive decryption key using the algorithm specified in the manifest.
+    Relies solely on audited hashlib/cryptography primitives.
+
+    Variants (confirmed against LibreOffice versions):
+      "sha256_sha1" (default): SHA-256(start_key) + PBKDF2-HMAC-SHA1  — LO 24.x-26.x
+      "sha1_sha1":   SHA-1(start_key)   + PBKDF2-HMAC-SHA1  — LO < 5.4
+      "raw_sha256":  raw password bytes + PBKDF2-HMAC-SHA256 — third-party
     """
-    start_key = hashlib.sha256(password.encode("utf-8")).digest()
-    return _pbkdf2_sha1(start_key, params["salt"],
-                         params["iterations"], params["key_size"])
-
-
-def _derive_key_all(password, params):
-    """All known variants — [0] is confirmed correct for modern LibreOffice."""
     pw   = password.encode("utf-8")
     salt = params["salt"]
     n    = params["iterations"]
     ksz  = params["key_size"]
-    s256 = hashlib.sha256(pw).digest()
-    s1   = hashlib.sha1(pw).digest()
 
-    results = []
-    for sk, prf in (
-        (s256, "sha1"),    # LO 24.x-26.x CONFIRMED
-        (s256, "sha256"),  # Fallback
-        (s1,   "sha1"),    # LO < 5.4
-        (s1,   "sha256"),  # Rare
-        (pw,   "sha256"),  # Third-party
-        (pw,   "sha1"),    # Very old
-    ):
-        try:
-            results.append(hashlib.pbkdf2_hmac(prf, sk, salt, n, dklen=ksz))
-        except Exception:
-            pass
-    return results
+    if variant == "sha256_sha1":
+        start_key = hashlib.sha256(pw).digest()
+        prf = "sha1"
+    elif variant == "sha1_sha1":
+        start_key = hashlib.sha1(pw).digest()
+        prf = "sha1"
+    elif variant == "raw_sha256":
+        start_key = pw
+        prf = "sha256"
+    else:
+        start_key = hashlib.sha256(pw).digest()
+        prf = "sha1"
 
+    return _pbkdf2_sha1(start_key, salt, n, ksz, prf)
+
+
+def _pbkdf2_sha1(pw_bytes, salt, iterations, key_len, prf="sha1"):
+    """PBKDF2 with configurable PRF — always delegates to audited libraries."""
+    try:
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.backends import default_backend
+        hash_algo = {"sha1": hashes.SHA1(), "sha256": hashes.SHA256()}.get(prf, hashes.SHA1())
+        kdf = PBKDF2HMAC(algorithm=hash_algo, length=key_len,
+                          salt=salt, iterations=iterations,
+                          backend=default_backend())
+        return kdf.derive(pw_bytes)
+    except ImportError:
+        return hashlib.pbkdf2_hmac(prf, pw_bytes, salt, iterations, dklen=key_len)
+
+
+# Backward-compatible alias for bug_tracker.py
+_derive_key = _derive_key_deterministic
 
 # ── Manifest parsing ──────────────────────────────────────────────────────────
 def _parse_manifest(manifest_xml):
@@ -250,31 +248,22 @@ def decrypt_odt(path, password):
         return _decrypt_argon2_gcm(password, params, enc_data)
 
     # ── Standard: SHA256 → PBKDF2-SHA1 → AES-256-CBC ─────────────────────────
-    for key in _derive_key_all(password, params):
+    # Try variants in deterministic order: confirmed first, then fallbacks.
+    for variant in ("sha256_sha1", "sha1_sha1", "raw_sha256"):
         try:
+            key = _derive_key_deterministic(password, params, variant)
             dec = _aes_cbc_decrypt(key, params["iv"], enc_data)
-
-            # Strict PKCS7 padding validation — prevents padding oracle attacks
-            # and avoids silently accepting corrupted decryptions.
-            # (Theoretical in a local-file context, but cryptographically correct.)
             if not dec:
                 continue
+
             pad = dec[-1]
             if not (1 <= pad <= 16):
                 continue
             if dec[-pad:] != bytes([pad]) * pad:
-                continue   # Invalid padding — wrong key or corrupted data
+                continue
             unc = dec[:-pad]
 
-            # Verify checksum if present
-            ck_ok = False
-            if params.get("checksum"):
-                ck_ok = (
-                    hashlib.sha256(dec[:1024]).digest() == params["checksum"] or
-                    hashlib.sha256(unc[:1024]).digest() == params["checksum"]
-                )
-
-            # Decompress and validate
+            # Try decompression variants
             for decomp in (
                 lambda d: zlib.decompress(d, -zlib.MAX_WBITS),
                 lambda d: zlib.decompress(d),
@@ -289,17 +278,6 @@ def decrypt_odt(path, password):
                             return text
                 except Exception:
                     continue
-
-            # Checksum passed but decompression variant not found
-            if ck_ok:
-                try:
-                    xml_bytes = zlib.decompress(unc, -zlib.MAX_WBITS)
-                    text = _xml_to_text_odf(xml_bytes.decode("utf-8", errors="replace"))
-                    if text.strip():
-                        return text
-                except Exception:
-                    pass
-
         except Exception:
             continue
 

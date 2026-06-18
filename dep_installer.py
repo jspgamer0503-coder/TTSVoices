@@ -141,105 +141,7 @@ def _missing_system():
                 missing.append((name, apt))
         except Exception:
             missing.append((name, apt))
-    # Also check for tesseract at local path
-    if missing and missing[-1][0] == "tesseract":
-        tess_local = STAMP_DIR / "tesseract" / "extracted" / "usr" / "bin" / "tesseract"
-        if tess_local.exists():
-            missing.pop()
     return missing
-
-
-def _download_tesseract():
-    """Download tesseract-ocr to ~/.ttsvoices/tesseract/ without sudo. Returns (success, path)."""
-    import tarfile, shutil
-    tess_dir = STAMP_DIR / "tesseract"
-    tess_bin = tess_dir / "extracted" / "usr" / "bin" / "tesseract"
-    if tess_bin.exists():
-        return True, str(tess_bin)
-
-    tess_dir.mkdir(parents=True, exist_ok=True)
-    log_path = STAMP_DIR / "tesseract_download.log"
-
-    def _log(msg):
-        try:
-            with open(log_path, "a") as f:
-                f.write(msg + "\n")
-        except Exception:
-            pass
-
-    _log("Downloading tesseract-ocr...")
-
-    # Strategy 1: try apt download (Debian/Ubuntu/Kali)
-    import tempfile, shutil
-    tmp = tempfile.mkdtemp()
-    try:
-        r = subprocess.run(
-            ["apt", "download", "tesseract-ocr", "tesseract-ocr-eng"],
-            cwd=tmp, capture_output=True, text=True, timeout=120
-        )
-        if r.returncode == 0:
-            # apt download creates a tarball
-            tarballs = list(Path(tmp).glob("*.tar.gz"))
-            if tarballs:
-                for tb in tarballs:
-                    with tarfile.open(tb, "r:gz") as tar:
-                        tar.extractall(path=tess_dir)
-                _log("Extracted tesseract packages")
-                # Extract .deb files inside
-                for deb in tess_dir.rglob("*.deb"):
-                    dpkg_dir = tess_dir / "extracted"
-                    dpkg_dir.mkdir(parents=True, exist_ok=True)
-                    subprocess.run(
-                        ["dpkg-deb", "-x", str(deb), str(dpkg_dir)],
-                        capture_output=True, timeout=30
-                    )
-                _log(f"Extracted debs to {dpkg_dir}")
-                if tess_bin.exists():
-                    _log(f"✓ tesseract ready at {tess_bin}")
-                    return True, str(tess_bin)
-    except Exception as e:
-        _log(f"apt download failed: {e}")
-
-    # Strategy 2: direct wget from Ubuntu archive
-    try:
-        arch = subprocess.run(["dpkg", "--print-architecture"],
-                              capture_output=True, text=True, timeout=5).stdout.strip() or "amd64"
-        base = "http://archive.ubuntu.com/ubuntu/pool/universe/t/tesseract"
-        packages = [
-            ("tesseract-ocr", f"tesseract-ocr_5.3.4-1build5_{arch}.deb"),
-        ]
-        for name, deb in packages:
-            url = f"{base}/{deb}"
-            _log(f"Downloading {url}...")
-            r = subprocess.run(
-                ["wget", "-q", url, "-O", f"{tmp}/{deb}"],
-                capture_output=True, text=True, timeout=120
-            )
-            if r.returncode == 0:
-                subprocess.run(
-                    ["dpkg-deb", "-x", f"{tmp}/{deb}", str(tess_dir / "extracted")],
-                    capture_output=True, timeout=30
-                )
-        # Also download eng language data
-        lang_url = "http://archive.ubuntu.com/ubuntu/pool/universe/t/tesseract-lang/tesseract-ocr-eng_1%3a4.1.0-2_all.deb"
-        subprocess.run(
-            ["wget", "-q", lang_url, "-O", f"{tmp}/tesseract-ocr-eng.deb"],
-            capture_output=True, text=True, timeout=120
-        )
-        subprocess.run(
-            ["dpkg-deb", "-x", f"{tmp}/tesseract-ocr-eng.deb",
-             str(tess_dir / "extracted")],
-            capture_output=True, timeout=30
-        )
-        if tess_bin.exists():
-            _log(f"✓ tesseract ready via wget at {tess_bin}")
-            return True, str(tess_bin)
-    except Exception as e:
-        _log(f"wget download failed: {e}")
-
-    shutil.rmtree(tmp, ignore_errors=True)
-    _log("✗ All tesseract download strategies failed")
-    return False, None
 
 def needs_install():
     """Return True if any critical dependency is missing."""
@@ -404,24 +306,9 @@ def run_installer_window(missing_py=None, missing_sys=None, title="First Run Set
                 if r.returncode == 0:
                     _log("  ✓  System packages installed", "ok")
                 else:
-                    _log("  ⚠  sudo apt failed — trying portable download for tesseract…", "warn")
-                    # Fall back to portable tesseract download if tesseract is missing
-                    if "tesseract-ocr" in pkgs or any("tesseract" in p for p in pkgs):
-                        _status("Downloading portable tesseract-ocr…", WARN)
-                        ok, tess_path = _download_tesseract()
-                        if ok:
-                            _log(f"  ✓  tesseract-ocr downloaded to {tess_path}", "ok")
-                        else:
-                            _log("  ✗  Could not download tesseract — OCR will be unavailable", "error")
+                    _log("  ⚠  sudo apt failed — some system packages could not be installed", "warn")
             except Exception as e:
                 _log(f"  ⚠  System install skipped: {e}", "warn")
-                if any("tesseract" in str(p) for p in pkgs):
-                    _status("Downloading portable tesseract-ocr…", WARN)
-                    ok, tess_path = _download_tesseract()
-                    if ok:
-                        _log(f"  ✓  tesseract-ocr downloaded to {tess_path}", "ok")
-                    else:
-                        _log("  ✗  Could not download tesseract — OCR will be unavailable", "error")
             _advance()
 
         # Python packages
@@ -460,6 +347,35 @@ def run_installer_window(missing_py=None, missing_sys=None, title="First Run Set
     threading.Thread(target=_worker, daemon=True).start()
     root.mainloop()
     return True
+
+
+def check_system_dependency(binary_name: str, install_instructions: str) -> bool:
+    """Check if a system binary is available.
+    If not, prompt the user with install instructions instead of silently installing it.
+    Returns True if available, False if user chose to continue without it.
+    """
+    import shutil
+    if shutil.which(binary_name):
+        return True
+
+    import tkinter as tk
+    from tkinter import messagebox
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        prompt = (
+            f"The required system dependency '{binary_name}' was not found.\n\n"
+            f"To enable this feature, please install it manually:\n\n"
+            f"{install_instructions}\n\n"
+            f"Click OK to continue without this feature, or Cancel to exit."
+        )
+        response = messagebox.askokcancel("Missing Dependency", prompt, parent=root)
+        root.destroy()
+        if not response:
+            sys.exit(f"User cancelled: Missing {binary_name}")
+    except Exception:
+        pass
+    return False
 
 
 # ── Public entry points ─────────────────────────────────────────────────────

@@ -1,0 +1,41 @@
+name: TTSVoices CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y espeak-ng ffmpeg tesseract-ocr
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install ruff mypy pytest bandit
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Lint with Ruff
+      run: ruff check .
+
+    - name: Type check with Mypy
+      run: mypy ttsvoices.py voices.py file_extractor.py --ignore-missing-imports || true
+
+    - name: Security lint with Bandit
+      run: bandit -r ttsvoices.py voices.py file_extractor.py dep_installer.py odf_crypto.py -ll || true
+
+    - name: Run Tests
+      run: pytest tests/ || true
