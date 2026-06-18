@@ -1,4 +1,4 @@
-# TTS Voices 2.5.2
+# TTS Voices 2.5.3
 **Unlimited Text-to-Speech Engine for Linux**
 
 A professional-grade Linux desktop TTS application with neural voice synthesis,
@@ -13,9 +13,9 @@ multi-format document support, and a modern dark UI.
 > the direction of the project owner.
 >
 > All releases from **v2.3.0 onward** have been developed, audited, and
-> shipped with AI assistance. The current 2.5.2 release fixes critical
-> bugs in the audio playback path, C extension memory safety, and
-> improves overall stability over the 2.5.1 release.
+> shipped with AI assistance. The current 2.5.3 release adds OCR
+> text extraction from images, auto-downloads tesseract-ocr
+> (no sudo required), and introduces multi-resolution window icons.
 >
 > **Project owner:** overseer (this repository)
 > **Active maintainer:** opencode AI assistant (v2.3.0 – present)
@@ -49,6 +49,7 @@ python3 ttsvoices.py
 
 - **Unlimited text processing** – handles documents of any size via smart chunking
 - **Multi-format file support** – PDF, DOCX, DOC, EPUB, HTML, RTF, ODT, TXT, MD, CSV
+- **Image OCR extraction** – extract text from PNG, JPG, JPEG, BMP, GIF, TIFF, WEBP via Load File (pytesseract + auto-installed tesseract-ocr)
 - **Three TTS engines** – Edge TTS (cloud, 7-9x faster) → Kokoro ONNX (offline) → espeak-ng (always works)
 - **17 Edge TTS voices** – en-US/GB/AU, male/female/child/multilingual
 - **Privacy toggle** – Settings → Cloud TTS to disable sending text to Microsoft servers
@@ -153,10 +154,11 @@ Plugins: `~/.ttsvoices/plugins/`
 
 | Action | Shortcut |
 |--------|----------|
-| Load file | Click ⬆ Load File |
-| Clear text | Click ✕ Clear |
-| Speak | Click ▶ SPEAK |
-| Stop | Click ■ STOP |
+| Speak | Ctrl+Enter |
+| Stop | Escape |
+| Load file | Ctrl+O |
+| Clear text | Ctrl+L |
+| Export WAV | Ctrl+Shift+E |
 
 ---
 
@@ -228,7 +230,7 @@ The check reads `VERSION` from the GitHub repo once at startup (3-second delay s
 The header subtitle shows live system metrics in a compact, custom format:
 
 ```
-v2.5.2 · ▶0 · CPU ▁▃▅▂▁▃▅▂ 26% · RAM 2.3/7.5G · DSK 69% · ▲35B ▼309B
+v2.5.3 · ▶0 · CPU ▁▃▅▂▁▃▅▂ 26% · RAM 2.3/7.5G · DSK 69% · ▲35B ▼309B
 ```
 
 - **Per-core block characters** (▁▂▃▄▅) – one per logical core
@@ -236,6 +238,16 @@ v2.5.2 · ▶0 · CPU ▁▃▅▂▁▃▅▂ 26% · RAM 2.3/7.5G · DSK 69% ·
 - **Disk usage** of root partition
 - **Network I/O** (▲up ▼down) in B/K/M/G per second
 - Colour shifts cyan → amber → red at load transitions
+
+---
+
+## Defaults
+
+| Setting | Default |
+|---------|---------|
+| Volume | 100 |
+| Speed | 1.0 |
+| Window maximized | Off (opens in normal windowed mode) |
 
 ---
 

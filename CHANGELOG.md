@@ -5,13 +5,58 @@ All versions in reverse chronological order.
 > is performed by the [opencode](https://opencode.ai) AI coding assistant,
 > under the direction of the project owner. Earlier versions (v1.x – v2.0)
 > were developed by prior contributors; see git history for full
-> authorship. The current 2.5.2 release fixes critical bugs in the audio
-> playback path and C extension memory safety. The license (MIT) and
-> copyright line at the top of LICENSE remain unchanged.
+> authorship. The current 2.5.3 release adds OCR image extraction,
+> auto-downloads tesseract-ocr, and introduces multi-resolution window
+> icons. The license (MIT) and copyright line at the top of LICENSE
+> remain unchanged.
 
 ---
 
-## [2.5.2] — 2026-06-16  ← CURRENT
+## [2.5.3] — 2026-06-18  ← CURRENT
+
+### New Features
+
+- **OCR image text extraction** — Load File now accepts images (PNG, JPG, JPEG,
+  BMP, GIF, TIFF, WEBP). Text is extracted via pytesseract and inserted into the
+  text area. No more manual transcription of screenshots.
+- **Auto-download tesseract-ocr** — `dep_installer.py` detects missing `tesseract`
+  binary and installs it automatically (via apt on Debian/Ubuntu, brew on macOS,
+  or direct download) — no sudo or manual steps required.
+- **Image file dialog filters** — Load File (`Ctrl+O`) now shows images alongside
+  documents. Filters include: All supported files, Images, PDF, DOCX, EPUB, etc.
+- **Multi-resolution window icons** — Application window and taskbar now use a
+  `.ico` with embedded 16×16, 32×32, 48×48, 64×64, 128×128, and 256×256 PNG
+  variants for crisp rendering at any DPI scaling.
+
+### Improvements
+
+- **Keyboard shortcuts** — Replaced click-based UI hints with proper keyboard
+  shortcuts: Ctrl+Enter (Speak), Escape (Stop), Ctrl+O (Load File), Ctrl+L
+  (Clear), Ctrl+Shift+E (Export WAV).
+- **Default volume** changed from 75 to **100**.
+- **Default speed** changed from 1.2 to **1.0** (normal speed).
+- **Window maximized default** changed from `True` to `False` — app opens in a
+  normal windowed mode, sized to fit the screen without maximising.
+
+### Files Changed
+- `ttsvoices.py` — OCR pipeline, image file dialog, keyboard bindings, defaults,
+  multi-resolution icon loading
+- `file_extractor.py` — `extract_image_text()` via pytesseract integration
+- `dep_installer.py` — tesseract-ocr auto-install logic
+- `requirements.txt` — added `pytesseract>=0.3.10`
+- `ttsvoices_icon.ico` — replaced with multi-resolution icon
+- `ttsvoices_icon_16.png` through `ttsvoices_icon_256.png` — added standalone
+  size variants for high-DPI and tiled WM taskbars
+- `CHANGELOG.md` — this entry
+
+### Version Housekeeping
+- `VERSION` bumped `2.5.2` → `2.5.3`
+- `dep_installer.py` stamp `.deps_ok_2.5.2` → `.deps_ok_2.5.3`
+- Module docstring updated to include OCR feature mention
+
+---
+
+## [2.5.2] — 2026-06-16
 
 ### Bug Fixes (codebase audit)
 
