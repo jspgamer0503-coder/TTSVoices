@@ -294,21 +294,15 @@ def run_installer_window(missing_py=None, missing_sys=None, title="First Run Set
         root.after(0, _do)
 
     def _worker():
-        # System packages
+        # System packages — show instructions instead of running sudo from GUI
         if missing_sys:
             pkgs = [apt for _, apt in missing_sys]
-            _log(f"System packages to install: {', '.join(pkgs)}")
-            _status("Installing system packages…", WARN)
-            try:
-                r = subprocess.run(
-                    ["sudo", "-n", "apt-get", "install", "-y", "-qq"] + pkgs,
-                    capture_output=True, text=True, timeout=120)
-                if r.returncode == 0:
-                    _log("  ✓  System packages installed", "ok")
-                else:
-                    _log("  ⚠  sudo apt failed — some system packages could not be installed", "warn")
-            except Exception as e:
-                _log(f"  ⚠  System install skipped: {e}", "warn")
+            _log(f"System packages required: {', '.join(pkgs)}")
+            _status("System packages needed…", WARN)
+            _log("  TTS Voices does not install system packages automatically.")
+            _log(f"  Run this command in a terminal:")
+            _log(f"    sudo apt install {' '.join(pkgs)}")
+            _log("  Then restart TTS Voices.")
             _advance()
 
         # Python packages
