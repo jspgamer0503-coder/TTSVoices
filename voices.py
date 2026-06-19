@@ -776,6 +776,16 @@ ENGINE_ESPEAK     = "espeak-ng"
 ENGINE_EDGE_TTS   = "Edge TTS (Cloud)"
 
 
+class TTSEngine:
+    """Abstract base class for TTS engines."""
+
+    def synthesize(self, text: str, voice: str) -> bytes:
+        raise NotImplementedError
+
+    def get_voices(self) -> list:
+        raise NotImplementedError
+
+
 class TTSEngineManager:
     """Selects the best available engine based on offline-first priority.
     Priority: Kokoro (offline) -> espeak-ng (fallback) -> Edge (opt-in cloud).
@@ -792,11 +802,13 @@ class TTSEngineManager:
                 continue
             if self._is_available(engine_name):
                 return engine_name
-        raise RuntimeError("No TTS engines are available.")
+        raise RuntimeError(
+            "No TTS engines are available. "
+            "Install at least one: 'pip install kokoro-onnx' or 'apt install espeak-ng'"
+        )
 
     @staticmethod
     def _is_available(name: str) -> bool:
-        from functools import lru_cache
         checks = {
             ENGINE_KOKORO:   lambda: check_kokoro(),
             ENGINE_ESPEAK:   lambda: check_espeak(),

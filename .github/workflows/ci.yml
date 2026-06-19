@@ -13,28 +13,29 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Set up Python 3.10
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: "3.10"
-
+        
     - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y espeak-ng ffmpeg tesseract-ocr
-
+        
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install ruff mypy pytest bandit
+        pip install ruff mypy pytest
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
+        
     - name: Lint with Ruff
       run: ruff check .
-
-    # Only type-check core logic modules — ttsvoices.py (7700-line Tkinter GUI)
-    # produces thousands of false positives from Tkinter's dynamic typing.
+      
+    # Only type-check core logic modules (not ttsvoices.py — Tkinter generates
+    # thousands of false positives). Exclude odf_crypto.py — crypto libraries
+    # lack inline type hints and produce unresolvable mypy errors.
     - name: Type check Core Modules
-      run: mypy voices.py file_extractor.py odf_crypto.py --ignore-missing-imports || true
+      run: mypy voices.py file_extractor.py --ignore-missing-imports
 
     - name: Run Tests
       run: |

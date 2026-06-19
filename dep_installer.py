@@ -349,6 +349,28 @@ def run_installer_window(missing_py=None, missing_sys=None, title="First Run Set
     return True
 
 
+# Singleton root for messagebox dialogs — created lazily to avoid zombie Tk windows
+_dialog_root = None
+
+def _get_dialog_root():
+    """Lazily creates a hidden root for messagebox dialogs."""
+    global _dialog_root
+    if _dialog_root is None:
+        import tkinter as tk
+        _dialog_root = tk.Tk()
+        _dialog_root.withdraw()
+    return _dialog_root
+
+def cleanup_dialogs():
+    """Destroys the singleton dialog root if it exists."""
+    global _dialog_root
+    if _dialog_root is not None:
+        try:
+            _dialog_root.destroy()
+        except Exception:
+            pass
+        _dialog_root = None
+
 def check_system_dependency(binary_name: str, install_instructions: str) -> bool:
     """Check if a system binary is available.
     If not, prompt the user with manual install instructions (graceful degradation).
@@ -358,11 +380,9 @@ def check_system_dependency(binary_name: str, install_instructions: str) -> bool
     if shutil.which(binary_name):
         return True
 
-    import tkinter as tk
     from tkinter import messagebox
     try:
-        root = tk.Tk()
-        root.withdraw()
+        root = _get_dialog_root()
         prompt = (
             f"The optional feature requires '{binary_name}', which is not installed.\n\n"
             f"To enable this feature, install it manually:\n\n"
@@ -370,7 +390,6 @@ def check_system_dependency(binary_name: str, install_instructions: str) -> bool
             f"The application will continue, but this feature will be disabled."
         )
         messagebox.showinfo("Missing Optional Dependency", prompt, parent=root)
-        root.destroy()
     except Exception:
         pass
     return False

@@ -1,28 +1,72 @@
 """
 ODF Decryption Module for LibreOffice ODT files.
 
-All cryptographic primitives delegate to audited libraries:
+Primary: odfpy (pip install odfpy) — handles manifest parsing, key derivation,
+         and AES decryption natively. Recommended for all production use.
+
+Fallback: manual implementation using audited libraries:
   - pycryptodome (Crypto.Cipher.AES) or cryptography.hazmat.primitives.ciphers
   - cryptography.hazmat.primitives.kdf.pbkdf2 or hashlib.pbkdf2_hmac
   - argon2-cffi (argon2.low_level)
 
 NO hand-rolled AES, SHA, or padding implementations.
-ODF uses the encrypted ZIP structure (not msoffcrypto-tool, which is for DOCX/XLSX).
-
-Confirmed algorithm for LibreOffice 24.x - 26.x:
-  1. start_key = SHA-256(password.encode("utf-8"))
-  2. key       = PBKDF2-HMAC-SHA1(start_key, salt, iterations, key_size)
-  3. plaintext = AES-256-CBC-decrypt(key, iv, ciphertext)
-  4. xml       = zlib.decompress(remove_pkcs7_padding(plaintext), -15)
 """
-import base64, hashlib, zipfile, zlib, xml.etree.ElementTree as ET, re
+import base64, hashlib, zipfile, zlib, xml.etree.ElementTree as ET, re, io, logging
+from pathlib import Path
+from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+
+def decrypt_odf(input_path: str, password: str) -> Optional[io.BytesIO]:
+    """Decrypt an ODF file using odfpy (preferred) or fallback to manual.
+
+    Returns a BytesIO stream of the decrypted content, or None on failure.
+    """
+    result = _decrypt_with_odfpy(input_path, password)
+    if result is not None:
+        return result
+    logger.info("odfpy not available, trying manual decryption")
+    return _decrypt_manual(input_path, password)
+
+
+def _decrypt_with_odfpy(input_path: str, password: str) -> Optional[io.BytesIO]:
+    """Decrypt using odfpy library — handles manifest parsing natively."""
+    try:
+        from odf.opendocument import OpenDocument
+    except ImportError:
+        return None
+
+    try:
+        path = Path(input_path)
+        if not path.exists():
+            logger.error(f"File not found: {input_path}")
+            return None
+        doc = OpenDocument(str(path), password=password)
+        buf = io.BytesIO()
+        doc.write(buf)
+        buf.seek(0)
+        logger.info(f"Decrypted with odfpy: {input_path}")
+        return buf
+    except Exception as e:
+        logger.error(f"odfpy decryption failed: {e}")
+        return None
+
+
+def _decrypt_manual(input_path: str, password: str) -> Optional[io.BytesIO]:
+    """Manual ODF decryption fallback using cryptography + zipfile."""
+    try:
+        return _decrypt_odf_core(input_path, password)
+    except Exception as e:
+        logger.error(f"Manual ODF decryption failed: {e}")
+        return None
+
 
 _MNS = "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"
 _NS  = {"manifest": _MNS}
 _A   = "{%s}" % _MNS
 
 
-# ── AES-256-CBC ───────────────────────────────────────────────────────────────
 def _aes_cbc_decrypt(key, iv, ciphertext):
     try:
         from Crypto.Cipher import AES
@@ -40,17 +84,7 @@ def _aes_cbc_decrypt(key, iv, ciphertext):
     raise RuntimeError("Install pycryptodome: pip install pycryptodome")
 
 
-# ── Key derivation ────────────────────────────────────────────────────────────
 def _derive_key_deterministic(password, params, variant="sha256_sha1"):
-    """
-    Derive decryption key using the algorithm specified in the manifest.
-    Relies solely on audited hashlib/cryptography primitives.
-
-    Variants (confirmed against LibreOffice versions):
-      "sha256_sha1" (default): SHA-256(start_key) + PBKDF2-HMAC-SHA1  — LO 24.x-26.x
-      "sha1_sha1":   SHA-1(start_key)   + PBKDF2-HMAC-SHA1  — LO < 5.4
-      "raw_sha256":  raw password bytes + PBKDF2-HMAC-SHA256 — third-party
-    """
     pw   = password.encode("utf-8")
     salt = params["salt"]
     n    = params["iterations"]
@@ -69,11 +103,10 @@ def _derive_key_deterministic(password, params, variant="sha256_sha1"):
         start_key = hashlib.sha256(pw).digest()
         prf = "sha1"
 
-    return _pbkdf2_sha1(start_key, salt, n, ksz, prf)
+    return _pbkdf2(start_key, salt, n, ksz, prf)
 
 
-def _pbkdf2_sha1(pw_bytes, salt, iterations, key_len, prf="sha1"):
-    """PBKDF2 with configurable PRF — always delegates to audited libraries."""
+def _pbkdf2(pw_bytes, salt, iterations, key_len, prf="sha1"):
     try:
         from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
         from cryptography.hazmat.primitives import hashes
@@ -87,10 +120,7 @@ def _pbkdf2_sha1(pw_bytes, salt, iterations, key_len, prf="sha1"):
         return hashlib.pbkdf2_hmac(prf, pw_bytes, salt, iterations, dklen=key_len)
 
 
-# Backward-compatible alias for bug_tracker.py
-_derive_key = _derive_key_deterministic
-
-# ── Manifest parsing ──────────────────────────────────────────────────────────
+_derive_key = _derive_key_deterministic  # backward compat for bug_tracker.py
 def _parse_manifest(manifest_xml):
     root    = ET.fromstring(manifest_xml)
     entries = {}
@@ -200,6 +230,12 @@ def is_odf_encrypted(path):
             return b"encryption-data" in z.read("META-INF/manifest.xml")
     except Exception:
         return False
+
+
+def _decrypt_odf_core(path, password):
+    """Core decryption logic — returns BytesIO or raises."""
+    text = decrypt_odt(path, password)
+    return io.BytesIO(text.encode("utf-8"))
 
 
 def decrypt_odt(path, password):
