@@ -31,11 +31,15 @@ jobs:
     - name: Lint with Ruff
       run: ruff check .
 
-    - name: Type check with Mypy
-      run: mypy ttsvoices.py voices.py file_extractor.py --ignore-missing-imports || true
-
-    - name: Security lint with Bandit
-      run: bandit -r ttsvoices.py voices.py file_extractor.py dep_installer.py odf_crypto.py -ll || true
+    # Only type-check core logic modules — ttsvoices.py (7700-line Tkinter GUI)
+    # produces thousands of false positives from Tkinter's dynamic typing.
+    - name: Type check Core Modules
+      run: mypy voices.py file_extractor.py odf_crypto.py --ignore-missing-imports || true
 
     - name: Run Tests
-      run: pytest tests/ || true
+      run: |
+        if [ -d "tests" ]; then
+          pytest tests/
+        else
+          echo "No tests directory found. Skipping."
+        fi

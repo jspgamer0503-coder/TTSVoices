@@ -1,7 +1,14 @@
 """
-TTS Voices 2.5.2 - ODF Decryption Module
+ODF Decryption Module for LibreOffice ODT files.
 
-Maintained by the opencode AI assistant — see README.md.
+All cryptographic primitives delegate to audited libraries:
+  - pycryptodome (Crypto.Cipher.AES) or cryptography.hazmat.primitives.ciphers
+  - cryptography.hazmat.primitives.kdf.pbkdf2 or hashlib.pbkdf2_hmac
+  - argon2-cffi (argon2.low_level)
+
+NO hand-rolled AES, SHA, or padding implementations.
+ODF uses the encrypted ZIP structure (not msoffcrypto-tool, which is for DOCX/XLSX).
+
 Confirmed algorithm for LibreOffice 24.x - 26.x:
   1. start_key = SHA-256(password.encode("utf-8"))
   2. key       = PBKDF2-HMAC-SHA1(start_key, salt, iterations, key_size)

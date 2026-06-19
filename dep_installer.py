@@ -351,8 +351,8 @@ def run_installer_window(missing_py=None, missing_sys=None, title="First Run Set
 
 def check_system_dependency(binary_name: str, install_instructions: str) -> bool:
     """Check if a system binary is available.
-    If not, prompt the user with install instructions instead of silently installing it.
-    Returns True if available, False if user chose to continue without it.
+    If not, prompt the user with manual install instructions (graceful degradation).
+    Returns True if available, False otherwise — never exits the application.
     """
     import shutil
     if shutil.which(binary_name):
@@ -364,15 +364,13 @@ def check_system_dependency(binary_name: str, install_instructions: str) -> bool
         root = tk.Tk()
         root.withdraw()
         prompt = (
-            f"The required system dependency '{binary_name}' was not found.\n\n"
-            f"To enable this feature, please install it manually:\n\n"
+            f"The optional feature requires '{binary_name}', which is not installed.\n\n"
+            f"To enable this feature, install it manually:\n\n"
             f"{install_instructions}\n\n"
-            f"Click OK to continue without this feature, or Cancel to exit."
+            f"The application will continue, but this feature will be disabled."
         )
-        response = messagebox.askokcancel("Missing Dependency", prompt, parent=root)
+        messagebox.showinfo("Missing Optional Dependency", prompt, parent=root)
         root.destroy()
-        if not response:
-            sys.exit(f"User cancelled: Missing {binary_name}")
     except Exception:
         pass
     return False
