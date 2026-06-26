@@ -151,7 +151,7 @@ def _probe_backends() -> list:
     ordered = []
     # pw-play — native PipeWire, zero ALSA conflicts
     if has("pw-play"):
-        ordered.append(["pw-play", "--target=auto"])
+        ordered.append(["pw-play"])
     # paplay — PulseAudio / PipeWire compat layer
     if has("paplay"):
         ordered.append(["paplay"])
@@ -188,7 +188,11 @@ def _play_file(path: str) -> bool:
         if ok is True:
             return True
         if ok == -1:
-            return False
+            # Backend busy — wait briefly then retry once before giving up
+            time.sleep(0.1)
+            ok = _run_backend(cmd)
+            if ok is True:
+                return True
         if ok is False and _stop_event.is_set():
             return False
         # Backend broke (not stopped) — fall through to re-probe
