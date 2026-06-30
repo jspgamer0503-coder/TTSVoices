@@ -16,7 +16,8 @@
 
 ```
 TTSVoices_v2.3.0/
-├── ttsvoices.py           6,122 lines  Main app + GUI + plugins + update checker
+├── ttsvoices.py           6,122 lines  Main app + GUI + update checker
+│                          (plugins removed in v2.5.3)
 ├── voices.py              1,218 lines  TTS engine abstraction (Kokoro/Piper/espeak)
 ├── voice_library.py       1,210 lines  Voice Library dialog (download/manage)
 ├── audio_handler.py         465 lines  Playback, export, C-extension bridge
@@ -37,9 +38,9 @@ TTSVoices_v2.3.0/
 ├── DEVELOPER_CODE_REVIEW.md           This file
 └── DEVELOPMENT_PLAN.md                Roadmap
 
-example_plugins/
-├── word_counter.py           Live word/char count nav button
-└── speak_log.py              Start/stop log to ~/.ttsvoices/speak_log.txt
+# example_plugins/                    REMOVED in v2.5.3
+# ├── word_counter.py                 Live word/char count nav button
+# └── speak_log.py                    Start/stop log to ~/.ttsvoices/speak_log.txt
 ```
 
 ---
@@ -56,11 +57,11 @@ main()
        ├─ _build_ui()            Window visible ~200ms
        └─ root.after(50, _post_map_init)
             ├─ _style_ttk()      TProgressbar + TCombobox + TNotebook themed
-            └─ daemon thread: _load_engines_background()
-                 └─ _finish_init():
-                      ├─ load voices, set provider, show bookmark
-                      ├─ _load_plugins()         ~/.ttsvoices/plugins/
-                      └─ root.after(800, _check_for_update_bg)
+             └─ daemon thread: _load_engines_background()
+                  └─ _finish_init():
+                       ├─ load voices, set provider, show bookmark
+                       # _load_plugins() removed in v2.5.3
+                       └─ root.after(800, _check_for_update_bg)
 ```
 
 ---
@@ -68,6 +69,9 @@ main()
 ## 3. Key Subsystems
 
 ### 3.1 Plugin System
+> **⚠ REMOVED in v2.5.3.** The plugin system code was deleted but this
+> architecture description is preserved for reference if plugins are
+> re-implemented in the future.
 - Scans `PLUGINS_DIR = CONFIG_DIR / "plugins"` at startup
 - Each `.py` file imported; `register(app)` called if present
 - Plugin API: `add_nav_button`, `on_speak_start`, `on_speak_stop`, `get_current_text`, `set_status`
@@ -98,7 +102,7 @@ _toplevel (tk.Toplevel)          ← _save() and X button destroy this
          ├─ Chunk size slider
          ├─ Highlight sync slider
          ├─ Updates (auto-check toggle + dep checker + Install All)
-         └─ Plugins (read-only status — manage via ⊕ Plugins nav button)
+         # Plugins section removed in v2.5.3
     └─ GlowButton "Save" → packs onto _toplevel
 ```
 **Critical:** `win = win_inner` rebinds the local variable. `_save()` and `GlowButton` must reference `_toplevel` (saved before the rebind) — otherwise only the inner frame is destroyed, leaving a black empty Toplevel.
@@ -124,7 +128,8 @@ _toplevel (tk.Toplevel)          ← _save() and X button destroy this
 | # | Issue | File | Priority |
 |---|-------|------|----------|
 | 1 | `ttsvoices.py` is 6,869 lines — monolithic structure, planned split deferred | ttsvoices.py | Medium |
-| 2 | No unit/integration test suite — `health_check.py` provides 65 static checks but not real unit tests | all | Low |
+| 2 | No unit/integration test suite — `health_check.py` provides 64 static checks but not real unit tests | all | Low |
+| 3 | Plugin system removed in v2.5.3 — §3.1 architecture preserved for future reference | docs | Info |
 
 ---
 

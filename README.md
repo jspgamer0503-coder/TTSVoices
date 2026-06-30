@@ -57,7 +57,6 @@ python3 ttsvoices.py
 - **Voice Library** – download and manage voice models in-app
 - **Save points** – resume long transcriptions from any chunk
 - **Dark UI** – modern navy/blue theme with glow accents, 14 themes available
-- **Plugin system** – `~/.ttsvoices/plugins/` for user extensions
 - **Per-core resource monitor** – live CPU/RAM/Disk/Net display in the header
 
 ---
@@ -145,8 +144,7 @@ tts_voices/
 
 Config & logs: `~/.ttsvoices/`  
 Models: `~/.ttsvoices/models/`  
-Logs: `~/.ttsvoices/logs/`  
-Plugins: `~/.ttsvoices/plugins/`
+Logs: `~/.ttsvoices/logs/`
 
 ---
 
@@ -256,5 +254,5 @@ v2.5.3 · ▶0 · CPU ▁▃▅▂▁▃▅▂ 26% · RAM 2.3/7.5G · DSK 69% ·
 - `CHANGELOG.md` – complete release history with all bug fixes
 - `DEVELOPMENT_PLAN.md` – roadmap, deferred items, and known limitations
 - `DEVELOPER_CODE_REVIEW.md` – audit notes from the v2.4.x reliability pass
-- `health_check.py` – run `python3 health_check.py` for a 65-test self-audit
+- `health_check.py` – run `python3 health_check.py` for a 64-test self-audit
 

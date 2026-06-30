@@ -29,7 +29,7 @@ def _log(msg: str):
 class SavePointManager:
     def __init__(self):
         # Owner-only permissions — save point files contain file paths which
-        # are personal data; also consistent with the plugins dir policy.
+        # are personal data.
         os.makedirs(SAVEPOINTS_DIR, mode=0o700, exist_ok=True)
         try:
             os.chmod(SAVEPOINTS_DIR, 0o700)

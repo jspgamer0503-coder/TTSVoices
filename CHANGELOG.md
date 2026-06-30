@@ -14,6 +14,15 @@ All versions in reverse chronological order.
 
 ## [2.5.3] — 2026-06-18  ← CURRENT
 
+> **Retroactive correction (2026-06-30):** The original v2.5.3 commit
+> also removed the plugin system code (`_load_plugins`, `PLUGINS_DIR`,
+> plugin_manager, example_plugins/) but this was not documented above
+> and docs/tests still referenced the feature. This patch corrects the
+> documentation, removes the obsolete `sec_plugins_dir_0700` health
+> check (which was permanently failing), and updates the check count
+> from 65 to 64. No functional code is changed — only docs and the
+> self-test that was exercising the removed feature.
+
 ### New Features
 
 - **OCR image text extraction** — Load File now accepts images (PNG, JPG, JPEG,

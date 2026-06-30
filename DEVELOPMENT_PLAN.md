@@ -1,6 +1,6 @@
 # TTS Voices — Development Plan
 
-**Current version:** 2.5.2
+**Current version:** 2.5.3
 **Last updated:** June 2026
 **Maintained by:** opencode AI assistant — see README.md "Development & Maintenance"
 
@@ -51,7 +51,16 @@
 | # | Issue | File | Priority |
 |---|-------|------|----------|
 | 1 | `ttsvoices.py` is now 6,869 lines — monolithic structure still in place | — | Medium — split deferred to a future major release |
-| 2 | No unit/integration test suite | all | Low — `health_check.py` provides 65 static checks, but not real unit tests |
+| 2 | No unit/integration test suite | all | Low — `health_check.py` provides 64 static checks, but not real unit tests |
+| 3 | Plugin system regression — code removed in v2.5.3 but docs/tests still referenced it | all | Low — fixed in this patch |
+| 4 | `v2.5.0` roadmap (plugin_manager.py split) assumes plugin loader still exists | DEVELOPMENT_PLAN.md | Info — flagged for future roadmap revision |
+| 5 | `v3.0.0` Plugin Ecosystem roadmap assumes plugin loader still exists | DEVELOPMENT_PLAN.md | Info — flagged for future roadmap revision |
+
+**Regression note:** The plugin system code was removed in a commit that
+also bumped to v2.5.3, but the removal was not documented in the changelog
+and docs/tests still assumed the feature existed. This went unnoticed because
+`health_check.py`'s `sec_plugins_dir_0700` check was the only test that
+exercised the plugin path, and it was failing silently.
 
 ---
 
@@ -64,9 +73,13 @@ ttsvoices.py       ~2,200 lines   Main window + entry
 app_dialogs.py     ~1,400 lines   Settings, Theme, Export, Update dialogs
 highlight.py         ~600 lines   SmoothScroller, highlight sync
 update_checker.py    ~350 lines   Update check + dep checker
-plugin_manager.py    ~400 lines   Plugin loader + Plugin Manager window
+# plugin_manager.py  ~400 lines   REMOVED — plugin system deleted in v2.5.3
 ```
-Extract order: update_checker → plugin_manager → highlight → app_dialogs → remainder
+Extract order: update_checker → highlight → app_dialogs → remainder
+
+> **⚠ Roadmap assumption:** The v2.5.0 module split originally included
+> `plugin_manager.py` for the plugin loader. The plugin system was removed
+> in v2.5.3; if re-implemented, add this extraction back to the plan.
 
 ### v2.6.0 — Desktop Integration
 - [ ] Nautilus/Nemo right-click service menu entry
@@ -75,6 +88,9 @@ Extract order: update_checker → plugin_manager → highlight → app_dialogs �
 - [ ] D-Bus interface for keyboard shortcut daemons
 
 ### v3.0.0 — Plugin Ecosystem
+> **⚠ Roadmap assumption:** This item assumes the plugin loader from
+> v2.3.0 still exists. It was removed in v2.5.3. Re-evaluate before
+> starting this work.
 - [ ] First-party plugins: SSML editor, reading stats, sentence highlighter
 - [ ] Plugin registry format with metadata JSON
 - [ ] Plugin version compatibility checks
@@ -96,8 +112,7 @@ Extract order: update_checker → plugin_manager → highlight → app_dialogs �
 | Venv pip only | Never touch system pip |
 | `os._exit(0)` on close | Vosk C++ threads not joinable — do not change |
 | No `killpg` | Kills user terminal — removed in v2.3.1 |
-| All dialogs themed | Use `_dark_confirm`, `_dark_error`, `_pick_plugin_file` |
-| `~/.ttsvoices/plugins/` is `0700` | Prevent local privilege escalation — do not relax |
+| All dialogs themed | Use `_dark_confirm`, `_dark_error` |
 
 ---
 
@@ -109,7 +124,7 @@ Extract order: update_checker → plugin_manager → highlight → app_dialogs �
 3. Update dep_installer.py STAMP if deps changed
 4. Add CHANGELOG.md entry at top
 5. python3 -c "import ast; ast.parse(open('ttsvoices.py').read())"
-6. python3 health_check.py   (must show 65 passed, 0 failed)
+6. python3 health_check.py   (must show 64 passed, 0 failed)
 7. python3 ttsvoices.py  (smoke test)
 8. git add -A
 9. git commit -m "v2.x.x — description"

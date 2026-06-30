@@ -160,32 +160,9 @@ def syntax_c_compiles(fix: bool) -> List[Result]:
 
 # ── Category: Security ────────────────────────────────────────────────────────
 
-@check
-def sec_plugins_dir_0700(fix: bool) -> List[Result]:
-    """PLUGINS_DIR created with mode=0o700 at all three sites."""
-    text = src("ttsvoices.py")
-    sites = text.count("PLUGINS_DIR.mkdir")
-    with_mode = text.count("PLUGINS_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)")
-    with_chmod = text.count("_os.chmod(PLUGINS_DIR, 0o700)")
-
-    if with_mode >= 3 and with_chmod >= 3:
-        return [Result("PASS", "Security", "PLUGINS_DIR 0700 at all mkdir sites")]
-
-    detail = f"mkdir calls: {sites}, with mode=0o700: {with_mode}, with chmod: {with_chmod}"
-    if fix:
-        # Auto-fix: replace any bare mkdir
-        fixed = text.replace(
-            "PLUGINS_DIR.mkdir(parents=True, exist_ok=True)\n",
-            "PLUGINS_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)\n"
-            "        try: import os as _os; _os.chmod(PLUGINS_DIR, 0o700)\n"
-            "        except Exception: pass\n"
-        )
-        if fixed != text:
-            (ROOT / "ttsvoices.py").write_text(fixed)
-            _src_cache.pop("ttsvoices.py", None)
-            return [Result("FIXED", "Security", "PLUGINS_DIR 0700", fix_applied="Added mode=0o700 + chmod to bare mkdir calls")]
-    return [Result("FAIL", "Security", "PLUGINS_DIR missing 0700 at some sites", detail=detail)]
-
+# NOTE: sec_plugins_dir_0700 check removed in this patch.
+# The plugin system code was deleted in v2.5.3, making this check
+# permanently fail. The check exercised a feature that no longer exists.
 
 @check
 def sec_savepoints_dir_0700(fix: bool) -> List[Result]:
